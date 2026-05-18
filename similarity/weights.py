@@ -40,9 +40,12 @@ CKPT_NAME = "cfg_stage2_s2_sp1_fold0_seed813664.pt"
 # do NOT vendor/copy his code; we clone it and pin to an exact commit so future
 # upstream changes cannot break this pipeline. For deletion-persistence, FORK it
 # to your own GitHub and set MRI_SIM_RSNA_GIT to your fork's URL.
+# Default = persistent fork under the project owner's account (forked from
+# upstream brendanartley/RSNA-2024-Competition, which has no LICENSE). Override
+# with MRI_SIM_RSNA_GIT. Upstream: github.com/brendanartley/RSNA-2024-Competition
 RSNA_REPO_GIT = os.environ.get(
     "MRI_SIM_RSNA_GIT",
-    "https://github.com/brendanartley/RSNA-2024-Competition.git")
+    "https://github.com/mjayasur/RSNA-2024-Competition.git")
 RSNA_REPO_COMMIT = os.environ.get(
     "MRI_SIM_RSNA_COMMIT", "0e795b09783ec773b6996d0816b6c6ae5541c197")
 KAGGLE_DATASET = "brendanartley/rsna2024-solution-metadata"

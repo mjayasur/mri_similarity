@@ -59,9 +59,9 @@ To survive upstream changes/deletion:
   `MRI_SIM_CKPT_URL` (or `MRI_SIM_CKPT`) to it.
 
 ### TODO (planned)
-- [ ] **Fork** `brendanartley/RSNA-2024-Competition` to `mjayasur/` and set it as
-      the default `MRI_SIM_RSNA_GIT` (deletion-persistence; do NOT vendor — no
-      upstream license).
+- [x] **Forked** `brendanartley/RSNA-2024-Competition` →
+      `github.com/mjayasur/RSNA-2024-Competition` and set as default
+      `MRI_SIM_RSNA_GIT` (deletion-persistence; not vendored — no upstream license).
 - [ ] Mirror the checkpoint to owner-controlled storage; wire as default
       `MRI_SIM_CKPT_URL`.
 - [ ] Add SPIDER-model embeddings to `similarity/embeddings.py` for: **Modic changes**,
