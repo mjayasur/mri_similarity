@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>NeuroLens · LumbarDISC Embedding Map</title>
+<!--
+  Screen 1: t-SNE map of the LumbarDISC concat embeddings (with axes), points
+            coloured by severity. Click a point ->
+  Screen 2: similarity screen for that study (reference + cosine nearest
+            neighbours, live scrollable Cornerstone viewers).
+  All numbers are real (t-SNE coords + exact cosine similarity from the
+  embeddings). De-identified RSNA-2024 / LumbarDISC research data.
+  Needs: website/tsne.json (scripts/make_tsne_app.py) + website/lumbardisc symlink.
+-->
+<style>
+  :root{--bg:#0a0d12;--bg2:#0e131a;--line:#1c2530;--line2:#26303c;
+    --txt:#e7edf3;--mut:#8a95a5;--dim:#5d6675;--cy:#34e3f0;--am:#f5a623;--rd:#ff5a5f}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;overflow:hidden;background:
+    radial-gradient(1100px 520px at 50% -8%,#10202b 0,transparent 60%),var(--bg);
+    color:var(--txt);font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+    display:flex;flex-direction:column}
+  .mono{font-family:"SF Mono",ui-monospace,Menlo,Consolas,monospace;
+        letter-spacing:.14em;text-transform:uppercase}
+  .top{display:flex;align-items:center;gap:16px;padding:11px 18px;
+       border-bottom:1px solid var(--line);background:var(--bg2)}
+  .logo{display:flex;align-items:center;gap:9px}
+  .logo .mk{width:28px;height:28px;border:1px solid var(--cy);border-radius:7px;
+       display:grid;place-items:center;color:var(--cy);box-shadow:0 0 16px #34e3f033}
+  .logo b{font-size:.95rem}.logo small{display:block;color:var(--cy);font-size:.56rem}
+  .crumb{font-size:.62rem;color:var(--dim)}
+  .pill{font-size:.6rem;color:var(--mut);border:1px solid var(--line2);
+       padding:5px 9px;border-radius:999px;display:flex;align-items:center;gap:6px}
+  .d{width:6px;height:6px;border-radius:50%;background:var(--cy);box-shadow:0 0 8px var(--cy)}
+  .back{background:none;border:1px solid var(--line2);color:var(--cy);
+        font:inherit;font-size:.7rem;padding:6px 12px;border-radius:6px;cursor:pointer}
+  .legend{display:flex;gap:16px;font-size:.62rem;color:var(--mut)}
+  .legend i{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
+  .sev-normal{background:var(--cy)}.sev-moderate{background:var(--am)}.sev-severe{background:var(--rd)}
+  /* screen 1 */
+  #map{flex:1;display:flex;flex-direction:column;min-height:0}
+  #plotwrap{flex:1;min-height:0;padding:14px 22px}
+  svg{width:100%;height:100%;display:block}
+  .axis{stroke:var(--line2);stroke-width:1}
+  .tick{stroke:var(--line);stroke-width:1}
+  .ticklab{fill:var(--dim);font-size:10px;font-family:"SF Mono",monospace}
+  .axlab{fill:var(--mut);font-size:11px;letter-spacing:.14em;text-transform:uppercase}
+  .pt{cursor:pointer}.pt:hover{stroke:#fff;stroke-width:1.5}
+  #tip{position:fixed;pointer-events:none;background:#000d;border:1px solid var(--line2);
+    color:var(--txt);font-size:.66rem;padding:5px 8px;border-radius:4px;display:none;z-index:9}
+  /* screen 2 */
+  #sim{flex:1;display:none;min-height:0}
+  #sim.on{display:flex}
+  .col{display:flex;flex-direction:column;min-height:0}
+  .left{width:248px;border-right:1px solid var(--line);overflow:auto}
+  .right{width:300px;border-left:1px solid var(--line);overflow:auto}
+  .center{flex:1;display:flex;flex-direction:column;min-width:0}
+  .sech{display:flex;justify-content:space-between;padding:11px 14px;border-bottom:1px solid var(--line)}
+  .sech .mono{font-size:.6rem;color:var(--cy)}.sech .n{font-size:.6rem;color:var(--dim)}
+  .nn{padding:10px 13px;border-bottom:1px solid var(--line);cursor:pointer;display:flex;align-items:center;gap:9px}
+  .nn:hover{background:#0f1620}.nn.on{background:#0f1d27;box-shadow:inset 3px 0 0 var(--cy)}
+  .nn .rk{font-size:.78rem;font-weight:800;color:var(--dim);width:20px}
+  .nn .info{flex:1}.nn .sid{font-size:.74rem;color:var(--cy)}
+  .nn .sub{font-size:.58rem;color:var(--dim);margin-top:2px}
+  .nn .pct{font-size:.95rem;font-weight:800;color:var(--cy)}
+  .viewer{flex:1;display:flex;flex-direction:column;min-height:0;border-bottom:1px solid var(--line)}
+  .viewer:last-child{border-bottom:none}
+  .vhead{display:flex;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--line)}
+  .vhead .kv{font-size:.6rem;color:var(--dim);line-height:1.7}
+  .vhead .kv b{color:var(--mut);font-weight:600}
+  .vrole{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase}
+  .vrole.ref{color:var(--mut)}.vrole.cmp{color:var(--cy)}
+  .canvas{flex:1;background:#000;position:relative;min-height:120px}
+  .ovl{position:absolute;left:10px;bottom:8px;font-size:.6rem;color:var(--cy);
+       background:#000a;padding:2px 7px;border-radius:3px;pointer-events:none}
+  .vtool{display:flex;gap:14px;align-items:center;padding:7px 14px;
+          border-top:1px solid var(--line);font-size:.6rem;color:var(--dim)}
+  .vtool input{flex:1;accent-color:var(--cy);height:4px}
+  .rsec{padding:14px 15px;border-bottom:1px solid var(--line)}
+  .rsec .mono{font-size:.6rem;color:var(--cy);margin-bottom:10px}
+  .kvp{display:flex;justify-content:space-between;font-size:.74rem;margin:7px 0}
+  .kvp b{color:var(--mut);font-weight:600}
+  .note{padding:14px 15px;font-size:.62rem;color:var(--dim);line-height:1.6}
+  .note .am{color:var(--am)}
+  .foot{display:flex;gap:22px;padding:7px 18px;border-top:1px solid var(--line);
+        background:var(--bg2);font-size:.58rem;color:var(--dim)}
+  .foot b{color:var(--mut)}.warn{color:var(--am)}
+</style>
+</head>
+<body>
+<div class="top">
+  <div class="logo"><div class="mk">◮</div>
+    <div><b>NeuroLens</b><small class="mono">Neurosurgery AI Data Lab</small></div></div>
+  <button class="back" id="back" style="display:none">← Back to map</button>
+  <span class="crumb mono" id="crumb">LumbarDISC · embedding map (t-SNE)</span>
+  <div style="flex:1"></div>
+  <div class="legend mono"><span><i class="sev-normal"></i>normal</span>
+    <span><i class="sev-moderate"></i>moderate</span><span><i class="sev-severe"></i>severe</span></div>
+  <span class="pill mono"><span class="d"></span>Cornerstone</span>
+</div>
+
+<!-- SCREEN 1 -->
+<div id="map">
+  <div class="sech"><span class="mono">Embedding map</span>
+    <span class="n mono" id="mapN">– studies · click a point</span></div>
+  <div id="plotwrap"><svg id="svg" viewBox="0 0 1000 600" preserveAspectRatio="xMidYMid meet"></svg></div>
+</div>
+
+<!-- SCREEN 2 -->
+<div id="sim">
+  <div class="col left">
+    <div class="sech"><span class="mono">Nearest by embedding</span><span class="n mono">cosine</span></div>
+    <div id="nnlist"></div>
+    <div class="note">Reference: <b id="refId" style="color:var(--cy)"></b>.
+      Ranked by exact cosine similarity in the RSNA-2024 feature space.</div>
+  </div>
+  <div class="col center">
+    <div class="viewer">
+      <div class="vhead">
+        <div class="kv mono"><span class="vrole ref">Reference study</span><br>
+          <b>STUDY</b> <span id="rS">–</span><br><b>MODALITY</b> MR · Sagittal T2/STIR<br>
+          <b>SLICES</b> <span id="rN">– / –</span></div>
+        <div class="kv mono" style="text-align:right"><b>DATASET</b> LumbarDISC<br>
+          <b>LABEL</b> <span id="rL">–</span></div>
+      </div>
+      <div class="canvas" id="v_ref"><div class="ovl mono" id="o_ref"></div></div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_ref" min="0" max="0"><span>scroll / wheel</span></div>
+    </div>
+    <div class="viewer">
+      <div class="vhead">
+        <div class="kv mono"><span class="vrole cmp">Comparison study</span><br>
+          <b>STUDY</b> <span id="cS">–</span><br><b>MODALITY</b> MR · Sagittal T2/STIR<br>
+          <b>SLICES</b> <span id="aN">– / –</span></div>
+        <div class="kv mono" style="text-align:right"><b>COSINE SIM</b> <span id="cSim" style="color:var(--cy)">–</span><br>
+          <b>LABEL</b> <span id="cL">–</span></div>
+      </div>
+      <div class="canvas" id="v_a"><div class="ovl mono" id="o_a"></div></div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_a" min="0" max="0"><span>scroll / wheel</span></div>
+    </div>
+  </div>
+  <div class="col right">
+    <div class="sech"><span class="mono">Study metadata</span><span class="n mono" id="metaId">–</span></div>
+    <div class="rsec">
+      <div class="mono">Comparison study</div>
+      <div class="kvp"><b>Dataset</b><span>RSNA-2024 LumbarDISC</span></div>
+      <div class="kvp"><b>Study UID</b><span id="mStudy">–</span></div>
+      <div class="kvp"><b>Modality</b><span>MR · Sagittal T2/STIR</span></div>
+      <div class="kvp"><b>Severity label</b><span id="mSev">–</span></div>
+      <div class="kvp"><b>Severity score</b><span id="mScore">–</span></div>
+      <div class="kvp"><b>Cosine similarity</b><span id="mSim" style="color:var(--cy)">–</span></div>
+    </div>
+    <div class="rsec">
+      <div class="mono">Reference</div>
+      <div class="kvp"><b>Study UID</b><span id="mRef">–</span></div>
+      <div class="kvp"><b>Severity label</b><span id="mRefSev">–</span></div>
+    </div>
+    <div class="note"><span class="am">Real:</span> t-SNE coords + exact cosine
+      similarity from the embeddings. <span class="am">Not in this demo:</span>
+      clinical/outcomes data or patient records — image studies + severity labels only.</div>
+  </div>
+</div>
+
+<div id="tip"></div>
+<div class="foot mono">
+  <span><b>INDEX</b> · <span id="fN">–</span> LumbarDISC studies</span>
+  <span><b>EMBED</b> · RSNA-2024 concat features</span>
+  <span><b>PROJ</b> · t-SNE (cosine)</span>
+  <span style="margin-left:auto" class="warn">research data, no PHI</span>
+</div>
+
+<script src="https://unpkg.com/dicom-parser@1.8.21/dist/dicomParser.min.js"></script>
+<script src="https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.min.js"></script>
+<script src="https://unpkg.com/cornerstone-wado-image-loader@4.13.2/dist/cornerstoneWADOImageLoader.bundle.min.js"></script>
+<script>
+(function(){
+  const cs=window.cornerstone,dp=window.dicomParser,wado=window.cornerstoneWADOImageLoader;
+  wado.external.cornerstone=cs;wado.external.dicomParser=dp;wado.configure({useWebWorkers:false});
+  const root=window.location.origin+"/";
+  const SVGNS="http://www.w3.org/2000/svg";
+  const COL={normal:"#34e3f0",moderate:"#f5a623",severe:"#ff5a5f"};
+  let DATA=null, P=null, byId={}, cur=null, st={};
+
+  // ---------- screen 1: t-SNE scatter with axes ----------
+  function drawMap(){
+    const svg=document.getElementById("svg");svg.innerHTML="";
+    const W=1000,H=600,m={l:64,r:20,t:18,b:50};
+    const xs=P.map(p=>p.x),ys=P.map(p=>p.y);
+    let x0=Math.min(...xs),x1=Math.max(...xs),y0=Math.min(...ys),y1=Math.max(...ys);
+    const px=(x1-x0)*.04||1,py=(y1-y0)*.04||1; x0-=px;x1+=px;y0-=py;y1+=py;
+    const X=v=>m.l+(v-x0)/(x1-x0)*(W-m.l-m.r);
+    const Y=v=>H-m.b-(v-y0)/(y1-y0)*(H-m.t-m.b);
+    function line(x1_,y1_,x2,y2,c){const e=document.createElementNS(SVGNS,"line");
+      e.setAttribute("x1",x1_);e.setAttribute("y1",y1_);e.setAttribute("x2",x2);
+      e.setAttribute("y2",y2);e.setAttribute("class",c);svg.appendChild(e);}
+    function txt(x,y,s,c,anc){const e=document.createElementNS(SVGNS,"text");
+      e.setAttribute("x",x);e.setAttribute("y",y);e.setAttribute("class",c);
+      e.setAttribute("text-anchor",anc||"middle");e.textContent=s;svg.appendChild(e);}
+    // axes
+    line(m.l,H-m.b,W-m.r,H-m.b,"axis"); line(m.l,m.t,m.l,H-m.b,"axis");
+    const NT=6;
+    for(let i=0;i<=NT;i++){
+      const fx=i/NT, vx=x0+fx*(x1-x0), X_=X(vx);
+      line(X_,H-m.b,X_,H-m.b+5,"tick");
+      txt(X_,H-m.b+18,vx.toFixed(1),"ticklab");
+      const fy=i/NT, vy=y0+fy*(y1-y0), Y_=Y(vy);
+      line(m.l-5,Y_,m.l,Y_,"tick");
+      txt(m.l-9,Y_+3,vy.toFixed(1),"ticklab","end");
+    }
+    txt((m.l+W-m.r)/2,H-10,DATA.axes.x,"axlab");
+    const yl=document.createElementNS(SVGNS,"text");
+    yl.setAttribute("x",16);yl.setAttribute("y",H/2);yl.setAttribute("class","axlab");
+    yl.setAttribute("text-anchor","middle");
+    yl.setAttribute("transform",`rotate(-90 16 ${H/2})`);
+    yl.textContent=DATA.axes.y;svg.appendChild(yl);
+    // points
+    const tip=document.getElementById("tip");
+    P.forEach(p=>{
+      const c=document.createElementNS(SVGNS,"circle");
+      c.setAttribute("cx",X(p.x));c.setAttribute("cy",Y(p.y));c.setAttribute("r",4);
+      c.setAttribute("fill",COL[p.severity]||"#888");
+      c.setAttribute("fill-opacity",".82");c.setAttribute("class","pt");
+      c.addEventListener("mousemove",e=>{tip.style.display="block";
+        tip.style.left=(e.clientX+12)+"px";tip.style.top=(e.clientY+12)+"px";
+        tip.innerHTML="STUDY "+p.study+" · "+p.severity+" (sev "+p.sev_score+")";});
+      c.addEventListener("mouseleave",()=>tip.style.display="none");
+      c.addEventListener("click",()=>{tip.style.display="none";openSim(p.study);});
+      svg.appendChild(c);
+    });
+  }
+
+  // ---------- screen 2: similarity ----------
+  function mount(slot,study,nEl){
+    const el=document.getElementById("v_"+slot),ov=document.getElementById("o_"+slot),
+          sl=document.getElementById("sl_"+slot);
+    if(!st[slot]){cs.enable(el);
+      el.onwheel=e=>{e.preventDefault();const s=st[slot];
+        let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
+        if(n!==s.idx)show(slot,n);};
+      sl.oninput=()=>show(slot,parseInt(sl.value,10));}
+    const sls=DATA.slices[study]||[];
+    st[slot]={el,ov,sl,nEl,ids:sls.map(u=>"wadouri:"+root+u),idx:0};
+    sl.min=0;sl.max=Math.max(0,sls.length-1);sl.value=0;
+    if(sls.length)show(slot,0);
+  }
+  function show(slot,n){const s=st[slot];if(!s.ids.length)return;
+    cs.loadAndCacheImage(s.ids[n]).then(im=>{cs.displayImage(s.el,im);s.idx=n;s.sl.value=n;
+      const t=(n+1)+" / "+s.ids.length;s.ov.textContent="SLICE "+t;
+      if(s.nEl)document.getElementById(s.nEl).textContent=t;}).catch(()=>{});}
+
+  function setCompare(nbr){
+    document.querySelectorAll('.nn').forEach(e=>
+      e.classList.toggle('on',e.dataset.s===nbr.study));
+    const pt=byId[nbr.study]||{};
+    const pct=(nbr.sim*100).toFixed(1)+"%";
+    document.getElementById("cS").textContent=nbr.study;
+    document.getElementById("cSim").textContent=pct;
+    document.getElementById("cL").textContent=pt.severity||"–";
+    document.getElementById("metaId").textContent=nbr.study;
+    document.getElementById("mStudy").textContent=nbr.study;
+    document.getElementById("mSev").textContent=pt.severity||"–";
+    document.getElementById("mScore").textContent=(pt.sev_score!=null?pt.sev_score:"–");
+    document.getElementById("mSim").textContent=pct+"  (cos d "+nbr.cos_dist+")";
+    mount("a",nbr.study,"aN");
+  }
+  function openSim(sid){
+    cur=byId[sid];
+    document.getElementById("map").style.display="none";
+    document.getElementById("sim").classList.add("on");
+    document.getElementById("back").style.display="";
+    document.getElementById("crumb").textContent="Similarity · reference "+sid;
+    document.getElementById("refId").textContent=sid;
+    document.getElementById("rS").textContent=sid;
+    document.getElementById("rL").textContent=cur.severity;
+    document.getElementById("mRef").textContent=sid;
+    document.getElementById("mRefSev").textContent=cur.severity;
+    const list=document.getElementById("nnlist");list.innerHTML="";
+    cur.nn.forEach((nbr,i)=>{
+      const pt=byId[nbr.study]||{};
+      const row=document.createElement("div");row.className="nn";row.dataset.s=nbr.study;
+      row.innerHTML='<span class="rk">'+(i+1)+'</span><span class="info">'+
+        '<div class="sid">STUDY '+nbr.study+'</div><div class="sub">'+
+        '<i style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+
+        (COL[pt.severity]||"#888")+';margin-right:5px"></i>'+(pt.severity||"–")+
+        ' · cos d '+nbr.cos_dist+'</div></span><span class="pct">'+
+        (nbr.sim*100).toFixed(0)+'%</span>';
+      row.onclick=()=>setCompare(nbr);list.appendChild(row);
+    });
+    mount("ref",sid,"rN");
+    setCompare(cur.nn[0]);
+  }
+  document.getElementById("back").onclick=()=>{
+    document.getElementById("sim").classList.remove("on");
+    document.getElementById("map").style.display="flex";
+    document.getElementById("back").style.display="none";
+    document.getElementById("crumb").textContent="LumbarDISC · embedding map (t-SNE)";
+  };
+
+  fetch("../tsne.json").then(r=>r.json()).then(j=>{
+    DATA=j;P=j.points;P.forEach(p=>byId[p.study]=p);
+    document.getElementById("mapN").textContent=P.length+" studies · click a point";
+    document.getElementById("fN").textContent=P.length;
+    drawMap();
+    window.addEventListener("resize",()=>{if(document.getElementById("map").style.display!=="none")drawMap();});
+  }).catch(e=>{document.getElementById("mapN").textContent="tsne.json not found — run scripts/make_tsne_app.py";});
+})();
+</script>
+</body>
+</html>

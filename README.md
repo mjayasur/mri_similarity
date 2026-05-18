@@ -42,6 +42,10 @@ dataset** and pass it via the `MRI_SIM_LUMBARDISC` environment variable (or the
    can see the embedding space + a Reference/A/B triplet.
 5. **`scripts/make_triplets.py`** — selects **40 triplets** from a LumbarDISC dataset
    (random at baseline) and writes `website/triplets.json` for the reader-study site.
+5b. **`scripts/make_tsne_app.py`** — builds `website/tsne.json` for the t-SNE
+   explorer: per-study t-SNE coords + severity + **exact cosine nearest
+   neighbours** from the embeddings, and symlinks `website/lumbardisc` at the
+   dataset image root so the DICOMs are servable.
 6. **`website/`** — the start of the triplet study site (Cornerstone.js, scrollable
    DICOM stacks, slider + mouse wheel, A/B choice logged to CSV). **A collaborator
    will replace the design** — keep the data contract (`triplets.json`, `/submit`)
@@ -113,6 +117,20 @@ python scripts/make_triplets.py --lumbardisc "$MRI_SIM_LUMBARDISC" --n 40
 
 cd website && python server.py        # serves http://127.0.0.1:8077
 ```
+### t-SNE explorer (full LumbarDISC, click a point -> similarity)
+
+```bash
+source .venv/bin/activate
+python scripts/make_tsne_app.py \
+    --lumbardisc /path/to/LumbarDISC/train_images   # <root>/<study>/<series>/<n>.dcm
+cd website && python server.py
+```
+Open `http://127.0.0.1:8077/mockups/neurolens_tsne.html`. Screen 1 is the
+t-SNE map (axes shown, points coloured by severity); click a study to open the
+similarity screen with its exact cosine nearest neighbours.
+
+---
+
 Open `http://127.0.0.1:8077/`. To expose it publicly off your machine:
 `cloudflared tunnel --url http://127.0.0.1:8077` (or ngrok). Responses are appended
 to `website/responses.csv`.
@@ -138,9 +156,13 @@ mri_similarity/
 │   ├── index.html                  # 3 scrollable DICOM stacks (slider + wheel), A/B choice
 │   ├── server.py                   # static server + POST /submit -> responses.csv
 │   ├── triplets.json               # triplet manifest (data contract; default = 1 demo triplet)
+│   ├── tsne.json                   # generated: t-SNE coords + cosine NN + slice lists (gitignored)
+│   ├── lumbardisc -> <dataset>/train_images   # generated symlink (gitignored)
 │   ├── mockups/                    # design-language mockups (served at /mockups/)
-│   │   └── neurolens_similarity.html   # NeuroLens "image similarity workspace" layout
-│   │                                   #   mock, populated with the 3 demo studies
+│   │   ├── neurolens_similarity.html   # NeuroLens comparison layout, 3 demo studies
+│   │   └── neurolens_tsne.html         # NeuroLens t-SNE map of the full LumbarDISC
+│   │                                   #   set; click a point -> similarity screen
+│   │                                   #   (needs tsne.json via make_tsne_app.py)
 │   └── data -> ../data/default_studies   # symlink; make_triplets.py can repoint this
 └── data/
     └── default_studies/            # 3 bundled LumbarDISC studies (DICOM) for the demo
