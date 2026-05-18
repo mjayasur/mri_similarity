@@ -22,11 +22,16 @@ dataset** and pass it via the `MRI_SIM_LUMBARDISC` environment variable (or the
 
 ## Functionality so far
 
-1. **`similarity/weights.py`** — resolves the checkpoint for the 2nd-place RSNA-2024
-   Lumbar Spine Kaggle solution (the model whose features we embed). The 503 MB
-   checkpoint is **not** vendored; the function locates it from `--ckpt`, the
-   `MRI_SIM_CKPT` env var, or the default local path, and explains where it comes
-   from if missing.
+1. **`similarity/weights.py`** — **gets** the model + weights for whoever runs it
+   (2nd-place RSNA-2024 Lumbar Spine solution, the model whose features we embed):
+   - clones the model code (`github.com/brendanartley/RSNA-2024-Competition`,
+     **pinned to an exact commit**) if not present;
+   - downloads the ~0.5 GB checkpoint (cached) from the Kaggle dataset
+     `brendanartley/rsna2024-solution-metadata` (the solution's own README hosts
+     the pretrained models there). Needs free Kaggle API creds.
+   - Nothing is vendored. Upstream has **no LICENSE**, so we clone (never copy)
+     and pin the commit. Overrides: `MRI_SIM_CKPT`, `MRI_SIM_CKPT_URL`,
+     `MRI_SIM_RSNA_GIT` (your fork), `MRI_SIM_RSNA_COMMIT`.
 2. **`similarity/embeddings.py`** — loads that model and extracts per-(study, level)
    feature embeddings (spinal/foraminal/subarticular attention features concatenated),
    plus `load_precomputed()` to load embeddings we already generated for the t-SNE work.
@@ -42,7 +47,23 @@ dataset** and pass it via the `MRI_SIM_LUMBARDISC` environment variable (or the
    will replace the design** — keep the data contract (`triplets.json`, `/submit`)
    stable. Ships working out of the box on the 3 bundled studies.
 
+### Third-party persistence (important)
+The model code and weights are **third-party** (Brendan Artley's 2nd-place
+RSNA-2024 solution; no upstream license, so we clone + pin rather than vendor).
+To survive upstream changes/deletion:
+- Code: the clone is **pinned** to commit `0e795b0…`. For deletion-persistence,
+  **fork** `brendanartley/RSNA-2024-Competition` to your GitHub and
+  `export MRI_SIM_RSNA_GIT=git@github.com:<you>/RSNA-2024-Competition.git`.
+- Weights: the checkpoint lives on a third-party Kaggle dataset. Mirror the
+  `cfg_stage2_s2_sp1_fold0_seed813664.pt` somewhere you control and set
+  `MRI_SIM_CKPT_URL` (or `MRI_SIM_CKPT`) to it.
+
 ### TODO (planned)
+- [ ] **Fork** `brendanartley/RSNA-2024-Competition` to `mjayasur/` and set it as
+      the default `MRI_SIM_RSNA_GIT` (deletion-persistence; do NOT vendor — no
+      upstream license).
+- [ ] Mirror the checkpoint to owner-controlled storage; wire as default
+      `MRI_SIM_CKPT_URL`.
 - [ ] Add SPIDER-model embeddings to `similarity/embeddings.py` for: **Modic changes**,
       **spondylolisthesis**, **disc height**, **vertebral body height**
       (concatenate alongside the current RSNA-2024 features).
