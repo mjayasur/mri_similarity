@@ -13,50 +13,81 @@
   is a symlink to the dataset root, set by scripts/make_triplets.py).
 -->
 <style>
-  body{margin:0;background:#0d0f12;color:#e8e8e8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}
-  header{padding:14px 20px;background:#15181d;border-bottom:1px solid #262b33}
-  header h1{margin:0;font-size:1.05rem}
-  header p{margin:6px 0 0;font-size:.85rem;color:#9aa4b2}
-  #prog{font-size:.85rem;color:#9aa4b2;margin-top:4px}
+  *{box-sizing:border-box}
+  body{margin:0;height:100vh;display:flex;flex-direction:column;overflow:hidden;
+       background:#0d0f12;color:#e8e8e8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{padding:12px 20px;background:#15181d;border-bottom:1px solid #262b33}
+  header h1{margin:0;font-size:1.02rem}
+  header p{margin:5px 0 0;font-size:.82rem;color:#9aa4b2}
+  #prog{font-size:.8rem;color:#9aa4b2;margin-top:3px}
+  .body{flex:1;display:flex;min-height:0}
+  /* sidebar: all triplets */
+  .side{width:210px;background:#101317;border-right:1px solid #262b33;overflow:auto}
+  .side h3{margin:0;padding:11px 14px;font-size:.66rem;letter-spacing:.12em;
+           text-transform:uppercase;color:#6a7480;border-bottom:1px solid #262b33}
+  .ti{display:flex;align-items:center;gap:9px;padding:9px 14px;cursor:pointer;
+      border-bottom:1px solid #1c2026;font-size:.8rem}
+  .ti:hover{background:#161b21}
+  .ti.cur{background:#15212b;box-shadow:inset 3px 0 0 #4aa3ff}
+  .ti .st{width:15px;height:15px;border-radius:50%;border:1px solid #3a4350;
+          flex:none;display:grid;place-items:center;font-size:.62rem;color:#9be29b}
+  .ti.done .st{background:#1a9641;border-color:#1a9641;color:#fff}
+  .ti .lab b{color:#cdd6e2}.ti .lab small{display:block;color:#5d6675;font-size:.62rem}
+  /* main */
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto}
   .grid{display:flex;gap:14px;justify-content:center;padding:18px;flex-wrap:wrap}
-  .panel{width:32%;min-width:300px}
+  .panel{width:32%;min-width:280px}
   .panel h2{margin:0 0 6px;font-size:.95rem;text-align:center}
   .ref h2{color:#d7191c}.a h2{color:#1a9641}.b h2{color:#2c7fb8}
-  .view{width:100%;aspect-ratio:1/1;background:#000;border:2px solid #333;position:relative}
+  .view{width:100%;aspect-ratio:1/1;background:#000;border:2px solid #333;position:relative;cursor:crosshair}
   .ref .view{border-color:#d7191c}.a .view{border-color:#1a9641}.b .view{border-color:#2c7fb8}
   .ovl{position:absolute;left:8px;bottom:6px;font-size:.72rem;color:#cfe;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:3px;pointer-events:none}
   .sliderwrap{display:flex;align-items:center;gap:8px;margin-top:8px}
   .sliderwrap input[type=range]{flex:1;height:6px;cursor:pointer}
   .ref input[type=range]{accent-color:#d7191c}.a input[type=range]{accent-color:#1a9641}.b input[type=range]{accent-color:#2c7fb8}
   .num{font-size:.74rem;color:#9aa4b2;min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
-  .hint{text-align:center;font-size:.74rem;color:#6a7480;margin-top:4px}
-  .ask{text-align:center;padding:14px 0 30px}
-  .ask p{font-size:1.05rem;margin:0 0 12px}
+  .hint{text-align:center;font-size:.72rem;color:#6a7480;margin-top:4px}
+  .hint .wl{color:#9aa4b2;font-variant-numeric:tabular-nums}
+  .ask{text-align:center;padding:8px 0 26px}
+  .ask p{font-size:1.02rem;margin:0 0 12px}
   button{font-size:1rem;padding:11px 26px;margin:0 10px;border:0;border-radius:6px;cursor:pointer;font-weight:600}
   #ba{background:#1a9641;color:#fff}#bb{background:#2c7fb8;color:#fff}
-  #done{font-size:1.05rem;color:#9be29b;margin-top:14px}
+  .nav{background:#2a2f37 !important;color:#cdd6e2 !important;font-weight:500 !important;padding:9px 16px !important}
+  #done{font-size:1rem;color:#9be29b;margin-top:12px}
   #err{color:#ff8080;text-align:center;font-size:.85rem}
 </style>
 </head>
 <body>
 <header>
   <h1>Lumbar MRI Triplet — Similarity Judgment</h1>
-  <p>Use the slider (or mouse wheel) under each panel to scroll slices. Compare <b>A</b> and <b>B</b> to the <b>Reference</b>, then choose which is more similar.</p>
+  <p>Scroll each panel (slider or mouse wheel). <b>Drag on an image</b> to window
+     (brightness/contrast); double-click resets. Pick which is more similar.</p>
   <div id="prog"></div>
 </header>
 
-<div class="grid">
-  <div class="panel ref"><h2>REFERENCE</h2><div class="view" id="v_ref"><div class="ovl" id="o_ref"></div></div><div class="sliderwrap"><input type="range" id="sl_ref" min="0" max="0"><span class="num" id="n_ref">– / –</span></div><div class="hint">drag slider or scroll</div></div>
-  <div class="panel a"><h2>A</h2><div class="view" id="v_a"><div class="ovl" id="o_a"></div></div><div class="sliderwrap"><input type="range" id="sl_a" min="0" max="0"><span class="num" id="n_a">– / –</span></div><div class="hint">drag slider or scroll</div></div>
-  <div class="panel b"><h2>B</h2><div class="view" id="v_b"><div class="ovl" id="o_b"></div></div><div class="sliderwrap"><input type="range" id="sl_b" min="0" max="0"><span class="num" id="n_b">– / –</span></div><div class="hint">drag slider or scroll</div></div>
-</div>
-
-<div class="ask">
-  <p>Which study is <b>more similar</b> to the Reference?</p>
-  <button id="ba">A is more similar</button>
-  <button id="bb">B is more similar</button>
-  <div id="done"></div>
-  <div id="err"></div>
+<div class="body">
+  <div class="side">
+    <h3 id="sideHead">Triplets</h3>
+    <div id="list"></div>
+  </div>
+  <div class="main">
+    <div class="grid">
+      <div class="panel ref"><h2>REFERENCE</h2><div class="view" id="v_ref"><div class="ovl" id="o_ref"></div></div><div class="sliderwrap"><input type="range" id="sl_ref" min="0" max="0"><span class="num" id="n_ref">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_ref">W – / L –</span></div></div>
+      <div class="panel a"><h2>A</h2><div class="view" id="v_a"><div class="ovl" id="o_a"></div></div><div class="sliderwrap"><input type="range" id="sl_a" min="0" max="0"><span class="num" id="n_a">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_a">W – / L –</span></div></div>
+      <div class="panel b"><h2>B</h2><div class="view" id="v_b"><div class="ovl" id="o_b"></div></div><div class="sliderwrap"><input type="range" id="sl_b" min="0" max="0"><span class="num" id="n_b">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_b">W – / L –</span></div></div>
+    </div>
+    <div class="ask">
+      <p>Which study is <b>more similar</b> to the Reference?</p>
+      <button id="ba">A is more similar</button>
+      <button id="bb">B is more similar</button>
+      <div>
+        <button class="nav" id="prev">← Prev</button>
+        <button class="nav" id="next">Next →</button>
+      </div>
+      <div id="done"></div>
+      <div id="err"></div>
+    </div>
+  </div>
 </div>
 
 <script src="https://unpkg.com/dicom-parser@1.8.21/dist/dicomParser.min.js"></script>
@@ -67,58 +98,118 @@
   const cs=window.cornerstone, dp=window.dicomParser, wado=window.cornerstoneWADOImageLoader;
   wado.external.cornerstone=cs; wado.external.dicomParser=dp;
   wado.configure({useWebWorkers:false});
-  const origin=window.location.href.replace(/[^/]*$/,"");  // dir of index.html
-  const slots=["ref","a","b"]; const st={};
-  let triplets=[], cur=0;
+  const origin=window.location.href.replace(/[^/]*$/,"");
+  const st={}; let triplets=[], cur=0; const done=new Set(); const answer={};
+
+  // drag = window/level, persisted per panel; double-click = auto reset
+  let win=null;
+  window.addEventListener("mousemove",e=>{
+    if(!win)return; const vp=cs.getViewport(win.el); if(!vp)return;
+    const f=Math.max(win.ww,1)/120;
+    vp.voi.windowWidth=Math.max(1,win.ww+(e.clientX-win.sx)*f);
+    vp.voi.windowCenter=win.wc+(e.clientY-win.sy)*f;
+    cs.setViewport(win.el,vp);
+    if(st[win.slot])st[win.slot].voi={ww:vp.voi.windowWidth,wc:vp.voi.windowCenter};
+    const w=document.getElementById("wl_"+win.slot);
+    if(w)w.textContent="W "+Math.round(vp.voi.windowWidth)+" / L "+Math.round(vp.voi.windowCenter);
+  });
+  window.addEventListener("mouseup",()=>{win=null;});
 
   function ids(slices){ return slices.map(u=>"wadouri:"+origin+u); }
   function mount(slot, slices){
-    const el=document.getElementById("v_"+slot), ovl=document.getElementById("o_"+slot),
-          sl=document.getElementById("sl_"+slot), num=document.getElementById("n_"+slot);
-    if(!st[slot]) cs.enable(el);
-    st[slot]={el,ovl,sl,num,ids:ids(slices),idx:0};
+    const el=document.getElementById("v_"+slot),
+          sl=document.getElementById("sl_"+slot);
+    if(!st[slot]){
+      cs.enable(el);
+      el.onwheel=function(e){e.preventDefault();const s=st[slot];
+        let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
+        if(n!==s.idx) show(slot,n);};
+      el.addEventListener("mousedown",e=>{
+        const vp=cs.getViewport(el); if(!vp)return;
+        win={el,slot,sx:e.clientX,sy:e.clientY,
+             ww:vp.voi.windowWidth,wc:vp.voi.windowCenter};
+        e.preventDefault();});
+      el.addEventListener("dblclick",()=>{
+        const s=st[slot]; if(!s)return; s.voi=null; show(slot,s.idx);});
+      sl.oninput=()=>show(slot,parseInt(sl.value,10));
+    }
+    st[slot]={el,
+      ovl:document.getElementById("o_"+slot), sl,
+      num:document.getElementById("n_"+slot),
+      ids:ids(slices), idx:0};
     sl.min=0; sl.max=Math.max(0,slices.length-1); sl.value=0;
-    show(slot,0);
-    sl.oninput=()=>show(slot,parseInt(sl.value,10));
-    el.onwheel=function(e){e.preventDefault();const s=st[slot];
-      let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
-      if(n!==s.idx) show(slot,n);};
+    if(slices.length) show(slot,0);
   }
   function show(slot,n){
-    const s=st[slot];
+    const s=st[slot]; if(!s.ids.length)return;
     cs.loadAndCacheImage(s.ids[n]).then(img=>{
       cs.displayImage(s.el,img); s.idx=n; s.sl.value=n;
       const t=(n+1)+" / "+s.ids.length; s.ovl.textContent="slice "+t; s.num.textContent=t;
+      const vp=cs.getViewport(s.el);
+      // full-range auto window from each image's own pixel range so the three
+      // panels look comparable; keep any manual windowing across slices.
+      if(!s.voi){
+        const mn=img.minPixelValue,mx=img.maxPixelValue;
+        s.voi={ww:Math.max(1,mx-mn),wc:(mx+mn)/2};
+      }
+      vp.voi.windowWidth=s.voi.ww; vp.voi.windowCenter=s.voi.wc;
+      cs.setViewport(s.el,vp);
+      const w=document.getElementById("wl_"+slot);
+      if(w)w.textContent="W "+Math.round(s.voi.ww)+" / L "+Math.round(s.voi.wc);
     }).catch(e=>{document.getElementById("err").textContent=slot+": "+((e&&e.error&&e.error.message)||e);});
   }
-  function loadTriplet(i){
-    const t=triplets[i];
-    document.getElementById("prog").textContent="Triplet "+(i+1)+" / "+triplets.length+"  (id "+t.id+")";
-    document.getElementById("done").textContent="";
-    document.getElementById("ba").style.display="";
-    document.getElementById("bb").style.display="";
-    mount("ref",t.ref.slices); mount("a",t.a.slices); mount("b",t.b.slices);
+
+  function renderList(){
+    const L=document.getElementById("list"); L.innerHTML="";
+    triplets.forEach((t,i)=>{
+      const d=document.createElement("div");
+      d.className="ti"+(i===cur?" cur":"")+(done.has(i)?" done":"");
+      d.innerHTML='<span class="st">'+(done.has(i)?"✓":"")+'</span>'+
+        '<span class="lab"><b>Triplet '+(i+1)+'</b><small>'+
+        (answer[i]?("answered "+answer[i]):("ref "+t.ref.study))+'</small></span>';
+      d.onclick=()=>{cur=i; loadTriplet(i);};
+      L.appendChild(d);
+    });
+    document.getElementById("sideHead").textContent=
+      "Triplets — "+done.size+" / "+triplets.length+" done";
   }
+  function loadTriplet(i){
+    cur=i; const t=triplets[i];
+    document.getElementById("prog").textContent=
+      "Triplet "+(i+1)+" / "+triplets.length+"  (id "+t.id+")"+
+      (answer[i]?("  ·  you chose "+answer[i]):"");
+    document.getElementById("done").textContent="";
+    document.getElementById("err").textContent="";
+    mount("ref",t.ref.slices); mount("a",t.a.slices); mount("b",t.b.slices);
+    renderList();
+  }
+  function go(d){ const n=cur+d; if(n>=0&&n<triplets.length) loadTriplet(n); }
+
   function submit(choice){
-    const t=triplets[cur];
+    const t=triplets[cur], i=cur;
     fetch("submit",{method:"POST",headers:{"Content-Type":"application/json"},
       body:JSON.stringify({triplet_id:t.id,choice,ref_study:t.ref.study,
         a_study:t.a.study,b_study:t.b.study,ts:new Date().toISOString()})})
       .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();})
       .then(()=>{
-        document.getElementById("ba").style.display="none";
-        document.getElementById("bb").style.display="none";
-        if(cur+1<triplets.length){
-          document.getElementById("done").textContent="Recorded. Loading next…";
-          cur++; setTimeout(()=>loadTriplet(cur),500);
+        done.add(i); answer[i]=choice; renderList();
+        let nxt=-1;
+        for(let k=1;k<=triplets.length;k++){const j=(i+k)%triplets.length;
+          if(!done.has(j)){nxt=j;break;}}
+        if(nxt>=0 && done.size<triplets.length){
+          document.getElementById("done").textContent="Recorded ("+choice+"). Loading next…";
+          setTimeout(()=>loadTriplet(nxt),450);
         } else {
-          document.getElementById("done").textContent="All triplets complete. Thank you.";
+          document.getElementById("done").textContent=
+            "All "+triplets.length+" triplets complete. Thank you.";
         }
       })
       .catch(e=>{document.getElementById("err").textContent="submit failed: "+e;});
   }
   document.getElementById("ba").onclick=()=>submit("A");
   document.getElementById("bb").onclick=()=>submit("B");
+  document.getElementById("prev").onclick=()=>go(-1);
+  document.getElementById("next").onclick=()=>go(1);
 
   fetch("triplets.json").then(r=>r.json()).then(j=>{
     triplets=j.triplets||[];
