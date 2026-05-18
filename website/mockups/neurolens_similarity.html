@@ -2,17 +2,19 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>NeuroLens · Image Similarity Workspace (mockup)</title>
+<title>NeuroLens · Study Comparison (mockup)</title>
 <!--
-  Layout mockup recreating the NeuroLens "image similarity" screen from the
-  design document, populated with our LumbarDISC triplet data.
-  NOTE: de-identified public research data (LumbarDISC). No patient PHI. The
-  "Clinical Propensity" / outcomes elements are ILLUSTRATIVE placeholders.
+  NeuroLens-themed layout mock. Scope: ONLY features that actually exist in
+  this repo today —
+    * the 3 bundled LumbarDISC demo studies (real dataset facts only)
+    * live, scrollable Cornerstone DICOM viewing
+  No clinical record / outcomes / computed similarity scores are shown,
+  because none of that is wired in this demo. De-identified research data.
 -->
 <style>
   :root{
     --bg:#0a0d12;--bg2:#0e131a;--panel:#11161d;--line:#1c2530;--line2:#26303c;
-    --txt:#e7edf3;--mut:#8a95a5;--dim:#5d6675;--cy:#34e3f0;--am:#f5a623;--rd:#ff5a5f;
+    --txt:#e7edf3;--mut:#8a95a5;--dim:#5d6675;--cy:#34e3f0;--am:#f5a623;
   }
   *{box-sizing:border-box}
   body{margin:0;height:100vh;overflow:hidden;background:
@@ -28,22 +30,14 @@
   .logo .mk{width:28px;height:28px;border:1px solid var(--cy);border-radius:7px;
        display:grid;place-items:center;color:var(--cy);box-shadow:0 0 16px #34e3f033}
   .logo b{font-size:.95rem}.logo small{display:block;color:var(--cy);font-size:.56rem}
-  .nav{display:flex;gap:4px}
-  .nav a{font-size:.8rem;color:var(--mut);padding:6px 12px;border-radius:6px;text-decoration:none}
-  .nav a.on{background:#152634;color:var(--cy)}
-  .search{flex:1;max-width:520px;background:var(--panel);border:1px solid var(--line2);
-       border-radius:7px;padding:8px 12px;color:var(--dim);font-size:.8rem}
-  .btn{background:var(--panel);border:1px solid var(--cy);color:var(--cy);
-       border-radius:7px;padding:8px 13px;font-size:.78rem;cursor:pointer}
+  .crumb{font-size:.62rem;color:var(--dim)}
   .pill{font-size:.6rem;color:var(--mut);border:1px solid var(--line2);
        padding:5px 9px;border-radius:999px;display:flex;align-items:center;gap:6px}
   .d{width:6px;height:6px;border-radius:50%;background:var(--cy);box-shadow:0 0 8px var(--cy)}
-  .av{width:28px;height:28px;border-radius:50%;border:1px solid var(--line2);
-      display:grid;place-items:center;font-size:.62rem;color:var(--mut)}
   .body{flex:1;display:flex;min-height:0}
   .col{display:flex;flex-direction:column;min-height:0}
-  .left{width:262px;border-right:1px solid var(--line);overflow:auto}
-  .right{width:330px;border-left:1px solid var(--line);overflow:auto}
+  .left{width:270px;border-right:1px solid var(--line);overflow:auto}
+  .right{width:320px;border-left:1px solid var(--line);overflow:auto}
   .center{flex:1;display:flex;flex-direction:column;min-width:0}
   .sech{display:flex;justify-content:space-between;padding:11px 14px;
         border-bottom:1px solid var(--line)}
@@ -51,157 +45,123 @@
   .sech .n{font-size:.6rem;color:var(--dim)}
   .scard{padding:11px 14px;border-bottom:1px solid var(--line);cursor:pointer}
   .scard:hover{background:#0f1620}
-  .scard.sel{background:#0f1d27;box-shadow:inset 3px 0 0 var(--cy)}
+  .scard.cmp{background:#0f1d27;box-shadow:inset 3px 0 0 var(--cy)}
+  .scard.refrow{box-shadow:inset 3px 0 0 var(--mut);cursor:default}
   .scard .r1{display:flex;justify-content:space-between;align-items:center}
   .scard .mrn{font-size:.78rem;color:var(--cy)}
-  .scard.norm .mrn{color:var(--txt)}
   .modtag{font-size:.54rem;border:1px solid var(--line2);color:var(--mut);
           padding:1px 5px;border-radius:3px}
-  .scard .ttl{font-size:.78rem;margin:5px 0 4px}
+  .scard .ttl{font-size:.76rem;margin:5px 0 4px;color:var(--mut)}
   .scard .meta{font-size:.6rem;color:var(--dim);display:flex;justify-content:space-between}
-  .mt{color:var(--cy)}
+  .sev-n{color:var(--cy)}.sev-s{color:var(--am)}
   .viewer{flex:1;display:flex;flex-direction:column;min-height:0;
           border-bottom:1px solid var(--line)}
+  .viewer:last-child{border-bottom:none}
   .vhead{display:flex;justify-content:space-between;padding:10px 14px;
          border-bottom:1px solid var(--line);align-items:flex-start}
   .vhead .kv{font-size:.6rem;color:var(--dim);line-height:1.7}
   .vhead .kv b{color:var(--mut);font-weight:600}
-  .match{font-size:1.7rem;font-weight:800;color:var(--cy);text-align:right}
-  .match small{display:block;font-size:.56rem;color:var(--dim);letter-spacing:.14em}
+  .vrole{font-size:.6rem;letter-spacing:.14em;text-transform:uppercase}
+  .vrole.ref{color:var(--mut)}.vrole.cmp{color:var(--cy)}
   .canvas{flex:1;background:#000;position:relative;min-height:120px}
   .ovl{position:absolute;left:10px;bottom:8px;font-size:.6rem;color:var(--cy);
        background:#000a;padding:2px 7px;border-radius:3px;pointer-events:none}
-  .vtool{display:flex;gap:14px;padding:7px 14px;border-top:1px solid var(--line);
-          font-size:.6rem;color:var(--dim)}
+  .vtool{display:flex;gap:14px;align-items:center;padding:7px 14px;
+          border-top:1px solid var(--line);font-size:.6rem;color:var(--dim)}
   .vtool input{flex:1;accent-color:var(--cy);height:4px}
-  .bars{padding:10px 16px;border-bottom:1px solid var(--line)}
-  .bar{display:flex;align-items:center;gap:12px;margin:7px 0;font-size:.66rem;color:var(--mut)}
-  .bar .lab{width:130px}
-  .track{flex:1;height:7px;background:#0d1620;border:1px solid var(--line2);border-radius:3px;overflow:hidden}
-  .fill{height:100%}
-  .fi-cy{background:var(--cy)}.fi-am{background:var(--am)}
-  .bar .v{width:42px;text-align:right;color:var(--txt);font-variant-numeric:tabular-nums}
-  .rsec{padding:13px 15px;border-bottom:1px solid var(--line)}
-  .rsec .mono{font-size:.6rem;color:var(--cy);margin-bottom:9px}
-  .kvp{display:flex;justify-content:space-between;font-size:.74rem;margin:6px 0}
+  .rsec{padding:14px 15px;border-bottom:1px solid var(--line)}
+  .rsec .mono{font-size:.6rem;color:var(--cy);margin-bottom:10px}
+  .kvp{display:flex;justify-content:space-between;font-size:.76rem;margin:7px 0}
   .kvp b{color:var(--mut);font-weight:600}
-  .dx{background:#241a06;border:1px solid #5a431099;color:var(--am);
-      font-size:.78rem;padding:8px 10px;border-radius:6px}
-  .sim{padding:11px 15px;border-bottom:1px solid var(--line);display:flex;gap:12px;align-items:center}
-  .sim .rk{font-size:1rem;font-weight:800;color:var(--dim);width:22px}
-  .sim .info{flex:1}
-  .sim .mr{font-size:.74rem;color:var(--cy)}
-  .sim .nm{font-size:.7rem;color:var(--mut);margin:3px 0 6px}
-  .mini{display:flex;align-items:center;gap:7px;font-size:.54rem;color:var(--dim)}
-  .mini .t{flex:1;height:4px;background:#0d1620;border-radius:2px;overflow:hidden}
-  .sim .pct{font-size:1.05rem;font-weight:800;color:var(--cy)}
+  .note{padding:14px 15px;font-size:.62rem;color:var(--dim);line-height:1.6}
+  .note .am{color:var(--am)}
   .foot{display:flex;gap:24px;padding:7px 18px;border-top:1px solid var(--line);
         background:var(--bg2);font-size:.58rem;color:var(--dim)}
-  .foot b{color:var(--mut)}
-  .warn{color:var(--am)}
+  .foot b{color:var(--mut)} .warn{color:var(--am)}
 </style>
 </head>
 <body>
 <div class="top">
   <div class="logo"><div class="mk">◮</div>
     <div><b>NeuroLens</b><small class="mono">Neurosurgery AI Data Lab</small></div></div>
-  <nav class="nav"><a class="on">Worklist</a><a>Cohorts</a><a>Models</a><a>Audit</a></nav>
-  <div class="search mono">Search studies…</div>
-  <button class="btn">⤴ Upload DICOM</button>
-  <span class="pill mono"><span class="d"></span>Postgres</span>
-  <span class="pill mono"><span class="d"></span>Orthanc</span>
-  <div class="av mono">RL</div>
+  <span class="crumb mono">Study Comparison · LumbarDISC demo</span>
+  <div style="flex:1"></div>
+  <span class="pill mono"><span class="d"></span>Cornerstone</span>
 </div>
 
 <div class="body">
-  <!-- LEFT: DICOM studies -->
+  <!-- LEFT: the studies we actually ship -->
   <div class="col left">
     <div class="sech"><span class="mono">DICOM Studies</span><span class="n mono">3 of 3</span></div>
-    <div class="scard sel" data-slot="ref">
+    <div class="scard refrow">
       <div class="r1"><span class="mrn">STUDY 2056309275</span><span class="modtag">MR</span></div>
-      <div class="ttl">Lumbar MRI · Sagittal T2 · normal</div>
-      <div class="meta"><span>LumbarDISC · sev 0</span><span class="mt">selected</span></div>
+      <div class="ttl">Lumbar MRI · Sagittal</div>
+      <div class="meta"><span class="sev-n">normal</span><span>reference</span></div>
     </div>
-    <div class="scard norm" data-slot="a">
+    <div class="scard cmp" data-study="a">
       <div class="r1"><span class="mrn">STUDY 7143189</span><span class="modtag">MR</span></div>
-      <div class="ttl">Lumbar MRI · Sagittal T2 · normal</div>
-      <div class="meta"><span>LumbarDISC · sev 0</span><span class="mt">93% match</span></div>
+      <div class="ttl">Lumbar MRI · Sagittal</div>
+      <div class="meta"><span class="sev-n">normal</span><span>compare ▸</span></div>
     </div>
-    <div class="scard norm" data-slot="b">
+    <div class="scard" data-study="b">
       <div class="r1"><span class="mrn">STUDY 808294521</span><span class="modtag">MR</span></div>
-      <div class="ttl">Lumbar MRI · Sagittal T2 · severe</div>
-      <div class="meta"><span>LumbarDISC · sev 17</span><span class="mt">55% match</span></div>
+      <div class="ttl">Lumbar MRI · Sagittal</div>
+      <div class="meta"><span class="sev-s">severe</span><span>compare ▸</span></div>
     </div>
-    <div class="micro mono" style="padding:14px">Mockup · de-identified<br>research data only</div>
+    <div class="note">Click a study to load it into the comparison viewer.</div>
   </div>
 
-  <!-- CENTER: selected + best match -->
+  <!-- CENTER: two live, scrollable viewers -->
   <div class="col center">
     <div class="viewer">
       <div class="vhead">
-        <div class="kv mono"><span class="micro" style="color:var(--cy)">Selected study</span><br>
-          <b>STUDY</b> 2056309275<br><b>MODALITY</b> MR · SAG T2<br><b>SLICES</b> <span id="rN">– / –</span></div>
-        <div class="kv mono" style="text-align:right"><b>DATASET</b> LumbarDISC<br><b>LABEL</b> normal · sev 0</div>
+        <div class="kv mono"><span class="vrole ref">Reference study</span><br>
+          <b>STUDY</b> 2056309275<br><b>MODALITY</b> MR · Sagittal<br>
+          <b>SLICES</b> <span id="rN">– / –</span></div>
+        <div class="kv mono" style="text-align:right"><b>DATASET</b> LumbarDISC<br><b>LABEL</b> normal</div>
       </div>
       <div class="canvas" id="v_ref"><div class="ovl mono" id="o_ref"></div></div>
-      <div class="vtool mono"><span>WIN/LVL</span><input type="range" id="sl_ref" min="0" max="0"><span id="t_ref">SAG · T2</span></div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_ref" min="0" max="0"><span>scroll / wheel</span></div>
     </div>
-    <div class="viewer" style="border-bottom:none">
+    <div class="viewer">
       <div class="vhead">
-        <div class="kv mono"><span class="micro" style="color:var(--cy)">⚡ Best match — AI similarity</span><br>
-          <b>STUDY</b> 7143189<br><b>MODALITY</b> MR · SAG T2<br><b>SLICES</b> <span id="aN">– / –</span></div>
-        <div class="match">93.0%<small>EMBEDDING MATCH</small></div>
+        <div class="kv mono"><span class="vrole cmp">Comparison study</span><br>
+          <b>STUDY</b> <span id="cmpId">7143189</span><br><b>MODALITY</b> MR · Sagittal<br>
+          <b>SLICES</b> <span id="aN">– / –</span></div>
+        <div class="kv mono" style="text-align:right"><b>DATASET</b> LumbarDISC<br><b>LABEL</b> <span id="cmpLab">normal</span></div>
       </div>
       <div class="canvas" id="v_a"><div class="ovl mono" id="o_a"></div></div>
-      <div class="vtool mono"><span>WIN/LVL</span><input type="range" id="sl_a" min="0" max="0"><span>SAG · T2</span></div>
-      <div class="bars">
-        <div class="bar"><span class="lab mono">Imaging similarity</span>
-          <div class="track"><div class="fill fi-cy" style="width:93%"></div></div><span class="v">93%</span></div>
-        <div class="bar"><span class="lab mono">Clinical propensity <span class="warn">·illustrative</span></span>
-          <div class="track"><div class="fill fi-am" style="width:90%"></div></div><span class="v">90%</span></div>
-      </div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_a" min="0" max="0"><span>scroll / wheel</span></div>
     </div>
   </div>
 
-  <!-- RIGHT: record + similar -->
+  <!-- RIGHT: only real dataset facts -->
   <div class="col right">
-    <div class="sech"><span class="mono">Study Record</span><span class="n mono">2056309275</span></div>
+    <div class="sech"><span class="mono">Study Metadata</span><span class="n mono" id="metaId">7143189</span></div>
     <div class="rsec">
-      <div class="mono">Dataset</div>
-      <div class="kvp"><b>Source</b><span>RSNA-2024 LumbarDISC</span></div>
-      <div class="kvp"><b>Study</b><span>2056309275</span></div>
-      <div class="kvp"><b>Series</b><span>Sagittal T2/STIR</span></div>
-      <div class="kvp"><b>Severity</b><span>0 · normal</span></div>
+      <div class="mono">Source</div>
+      <div class="kvp"><b>Dataset</b><span>RSNA-2024 LumbarDISC</span></div>
+      <div class="kvp"><b>Study UID</b><span id="mStudy">7143189</span></div>
+      <div class="kvp"><b>Modality</b><span>MR</span></div>
+      <div class="kvp"><b>Series</b><span>Sagittal</span></div>
+      <div class="kvp"><b>Severity label</b><span id="mSev">normal</span></div>
     </div>
     <div class="rsec">
-      <div class="mono">Reference label</div>
-      <div class="dx">Normal lumbar spine (no significant stenosis) — de-identified research study</div>
+      <div class="mono">Reference</div>
+      <div class="kvp"><b>Study UID</b><span>2056309275</span></div>
+      <div class="kvp"><b>Severity label</b><span class="sev-n">normal</span></div>
     </div>
-    <div class="sech"><span class="mono">⚡ Similar studies</span><span class="n mono">Top 2</span></div>
-    <div class="sim">
-      <span class="rk">01</span>
-      <div class="info"><div class="mr">STUDY 7143189 <span class="modtag">MR</span></div>
-        <div class="nm">Lumbar · Sagittal T2 · normal</div>
-        <div class="mini"><span>IMG</span><div class="t"><div class="fill fi-cy" style="width:93%"></div></div>93</div>
-        <div class="mini"><span>CLN</span><div class="t"><div class="fill fi-am" style="width:90%"></div></div>90</div></div>
-      <span class="pct">93%</span>
+    <div class="note">
+      <span class="am">Not in this demo:</span> automated similarity scores,
+      clinical/outcomes data, and patient records. Only the de-identified
+      LumbarDISC image studies and their severity labels exist here.
     </div>
-    <div class="sim">
-      <span class="rk">02</span>
-      <div class="info"><div class="mr">STUDY 808294521 <span class="modtag">MR</span></div>
-        <div class="nm">Lumbar · Sagittal T2 · severe</div>
-        <div class="mini"><span>IMG</span><div class="t"><div class="fill fi-cy" style="width:55%"></div></div>55</div>
-        <div class="mini"><span>CLN</span><div class="t"><div class="fill fi-am" style="width:48%"></div></div>48</div></div>
-      <span class="pct" style="color:var(--am)">55%</span>
-    </div>
-    <div class="micro mono" style="padding:14px">IMG = embedding cosine similarity (real).<br>CLN = illustrative placeholder (no outcomes data).</div>
   </div>
 </div>
 
 <div class="foot mono">
   <span><b>INDEX</b> · 3 studies (LumbarDISC demo)</span>
-  <span><b>EMBEDDING</b> · concat · t-SNE</span>
-  <span><b>SIMILARITY</b> · cosine</span>
+  <span><b>VIEWER</b> · Cornerstone · scrollable</span>
   <span style="margin-left:auto" class="warn">MOCKUP — research data, no PHI</span>
 </div>
 
@@ -212,27 +172,40 @@
 (function(){
   const cs=window.cornerstone,dp=window.dicomParser,wado=window.cornerstoneWADOImageLoader;
   wado.external.cornerstone=cs;wado.external.dicomParser=dp;wado.configure({useWebWorkers:false});
-  const root=window.location.origin+"/"; const st={};
-  function mount(slot,T,nEl){
+  const root=window.location.origin+"/"; const st={}; let T=null;
+  const SEV={a:"normal",b:"severe"};
+  function mount(slot,study,nEl){
     const el=document.getElementById("v_"+slot),ov=document.getElementById("o_"+slot),
           sl=document.getElementById("sl_"+slot);
-    cs.enable(el);
-    st[slot]={el,ov,sl,ids:T.slices.map(u=>"wadouri:"+root+u),idx:0,nEl};
-    sl.min=0;sl.max=Math.max(0,T.slices.length-1);sl.value=0;show(slot,0);
-    sl.oninput=()=>show(slot,parseInt(sl.value,10));
-    el.onwheel=e=>{e.preventDefault();const s=st[slot];
-      let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
-      if(n!==s.idx)show(slot,n);};
+    if(!st[slot]){cs.enable(el);
+      el.onwheel=e=>{e.preventDefault();const s=st[slot];
+        let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
+        if(n!==s.idx)show(slot,n);};
+      sl.oninput=()=>show(slot,parseInt(sl.value,10));}
+    st[slot]={el,ov,sl,nEl,ids:study.slices.map(u=>"wadouri:"+root+u),idx:0};
+    sl.min=0;sl.max=Math.max(0,study.slices.length-1);sl.value=0;show(slot,0);
   }
   function show(slot,n){const s=st[slot];
     cs.loadAndCacheImage(s.ids[n]).then(im=>{cs.displayImage(s.el,im);s.idx=n;s.sl.value=n;
       const t=(n+1)+" / "+s.ids.length;s.ov.textContent="SLICE "+t;
-      if(s.nEl)document.getElementById(s.nEl).textContent=t;})
-     .catch(()=>{});}
+      if(s.nEl)document.getElementById(s.nEl).textContent=t;}).catch(()=>{});}
+  function setCompare(which){
+    const study=which==="a"?T.a:T.b, sev=SEV[which];
+    document.querySelectorAll('.scard[data-study]').forEach(c=>
+      c.classList.toggle('cmp',c.dataset.study===which));
+    document.getElementById("cmpId").textContent=study.study;
+    document.getElementById("cmpLab").textContent=sev;
+    document.getElementById("metaId").textContent=study.study;
+    document.getElementById("mStudy").textContent=study.study;
+    document.getElementById("mSev").textContent=sev;
+    mount("a",study,"aN");
+  }
+  document.querySelectorAll('.scard[data-study]').forEach(c=>
+    c.onclick=()=>setCompare(c.dataset.study));
   fetch("../triplets.json").then(r=>r.json()).then(j=>{
-    const t=(j.triplets||[])[0]; if(!t)return;
-    mount("ref",t.ref,"rN");   // selected study
-    mount("a",t.a,"aN");       // best match
+    T=(j.triplets||[])[0]; if(!T)return;
+    mount("ref",T.ref,"rN");
+    setCompare("a");
   }).catch(()=>{});
 })();
 </script>
