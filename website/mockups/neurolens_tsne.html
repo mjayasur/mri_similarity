@@ -187,6 +187,7 @@
     vp.voi.windowWidth=Math.max(1,win.ww+(e.clientX-win.sx)*f);
     vp.voi.windowCenter=win.wc+(e.clientY-win.sy)*f;
     cs.setViewport(win.el,vp);
+    if(st[win.slot])st[win.slot].voi={ww:vp.voi.windowWidth,wc:vp.voi.windowCenter};
     const w=document.getElementById("wl_"+win.slot);
     if(w)w.textContent="W "+Math.round(vp.voi.windowWidth)+" / L "+Math.round(vp.voi.windowCenter);
   });
@@ -254,11 +255,8 @@
         win={el,slot,sx:e.clientX,sy:e.clientY,
              ww:vp.voi.windowWidth,wc:vp.voi.windowCenter};
         e.preventDefault();});
-      el.addEventListener("dblclick",()=>{
-        const im=cs.getImage(el); if(!im)return;
-        cs.setViewport(el,cs.getDefaultViewportForImage(el,im));
-        const w=document.getElementById("wl_"+slot);
-        if(w)w.textContent="W "+Math.round(im.windowWidth)+" / L "+Math.round(im.windowCenter);});
+      el.addEventListener("dblclick",()=>{           // reset to auto full-range
+        const s=st[slot]; if(!s)return; s.voi=null; show(slot,s.idx);});
       sl.oninput=()=>show(slot,parseInt(sl.value,10));}
     const sls=DATA.slices[study]||[];
     st[slot]={el,ov,sl,nEl,ids:sls.map(u=>"wadouri:"+root+u),idx:0};
@@ -269,8 +267,18 @@
     cs.loadAndCacheImage(s.ids[n]).then(im=>{cs.displayImage(s.el,im);s.idx=n;s.sl.value=n;
       const t=(n+1)+" / "+s.ids.length;s.ov.textContent="SLICE "+t;
       if(s.nEl)document.getElementById(s.nEl).textContent=t;
-      const vp=cs.getViewport(s.el),w=document.getElementById("wl_"+slot);
-      if(vp&&w)w.textContent="W "+Math.round(vp.voi.windowWidth)+" / L "+Math.round(vp.voi.windowCenter);
+      const vp=cs.getViewport(s.el);
+      // both viewers use a full-range auto window from each image's own pixel
+      // range so different series look visually comparable; persist any manual
+      // windowing the user has applied to this viewer across slices.
+      if(!s.voi){
+        const mn=im.minPixelValue,mx=im.maxPixelValue;
+        s.voi={ww:Math.max(1,mx-mn),wc:(mx+mn)/2};
+      }
+      vp.voi.windowWidth=s.voi.ww;vp.voi.windowCenter=s.voi.wc;
+      cs.setViewport(s.el,vp);
+      const w=document.getElementById("wl_"+slot);
+      if(w)w.textContent="W "+Math.round(s.voi.ww)+" / L "+Math.round(s.voi.wc);
     }).catch(()=>{});}
 
   function setCompare(nbr){
