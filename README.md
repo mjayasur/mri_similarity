@@ -138,6 +138,9 @@ mri_similarity/
 │   ├── index.html                  # 3 scrollable DICOM stacks (slider + wheel), A/B choice
 │   ├── server.py                   # static server + POST /submit -> responses.csv
 │   ├── triplets.json               # triplet manifest (data contract; default = 1 demo triplet)
+│   ├── mockups/                    # design-language mockups (served at /mockups/)
+│   │   └── neurolens_similarity.html   # NeuroLens "image similarity workspace" layout
+│   │                                   #   mock, populated with the 3 demo studies
 │   └── data -> ../data/default_studies   # symlink; make_triplets.py can repoint this
 └── data/
     └── default_studies/            # 3 bundled LumbarDISC studies (DICOM) for the demo
