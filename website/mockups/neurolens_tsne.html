@@ -124,7 +124,7 @@
           <b>LABEL</b> <span id="rL">–</span></div>
       </div>
       <div class="canvas" id="v_ref"><div class="ovl mono" id="o_ref"></div></div>
-      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_ref" min="0" max="0"><span>scroll / wheel</span></div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_ref" min="0" max="0"><span id="wl_ref">W – / L –</span><span title="wheel = scroll · drag = window/level · dbl-click = reset">⌖ drag</span></div>
     </div>
     <div class="viewer">
       <div class="vhead">
@@ -135,7 +135,7 @@
           <b>LABEL</b> <span id="cL">–</span></div>
       </div>
       <div class="canvas" id="v_a"><div class="ovl mono" id="o_a"></div></div>
-      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_a" min="0" max="0"><span>scroll / wheel</span></div>
+      <div class="vtool mono"><span>Slice</span><input type="range" id="sl_a" min="0" max="0"><span id="wl_a">W – / L –</span><span title="wheel = scroll · drag = window/level · dbl-click = reset">⌖ drag</span></div>
     </div>
   </div>
   <div class="col right">
@@ -178,7 +178,19 @@
   const root=window.location.origin+"/";
   const SVGNS="http://www.w3.org/2000/svg";
   const COL={normal:"#34e3f0",moderate:"#f5a623",severe:"#ff5a5f"};
-  let DATA=null, P=null, byId={}, cur=null, st={};
+  let DATA=null, P=null, byId={}, cur=null, st={}, win=null;
+
+  // drag = window/level (brightness/contrast); double-click = reset
+  window.addEventListener("mousemove",e=>{
+    if(!win)return; const vp=cs.getViewport(win.el); if(!vp)return;
+    const f=Math.max(win.ww,1)/120;
+    vp.voi.windowWidth=Math.max(1,win.ww+(e.clientX-win.sx)*f);
+    vp.voi.windowCenter=win.wc+(e.clientY-win.sy)*f;
+    cs.setViewport(win.el,vp);
+    const w=document.getElementById("wl_"+win.slot);
+    if(w)w.textContent="W "+Math.round(vp.voi.windowWidth)+" / L "+Math.round(vp.voi.windowCenter);
+  });
+  window.addEventListener("mouseup",()=>{win=null;});
 
   // ---------- screen 1: t-SNE scatter with axes ----------
   function drawMap(){
@@ -233,9 +245,20 @@
     const el=document.getElementById("v_"+slot),ov=document.getElementById("o_"+slot),
           sl=document.getElementById("sl_"+slot);
     if(!st[slot]){cs.enable(el);
+      el.style.cursor="crosshair";
       el.onwheel=e=>{e.preventDefault();const s=st[slot];
         let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
         if(n!==s.idx)show(slot,n);};
+      el.addEventListener("mousedown",e=>{
+        const vp=cs.getViewport(el); if(!vp)return;
+        win={el,slot,sx:e.clientX,sy:e.clientY,
+             ww:vp.voi.windowWidth,wc:vp.voi.windowCenter};
+        e.preventDefault();});
+      el.addEventListener("dblclick",()=>{
+        const im=cs.getImage(el); if(!im)return;
+        cs.setViewport(el,cs.getDefaultViewportForImage(el,im));
+        const w=document.getElementById("wl_"+slot);
+        if(w)w.textContent="W "+Math.round(im.windowWidth)+" / L "+Math.round(im.windowCenter);});
       sl.oninput=()=>show(slot,parseInt(sl.value,10));}
     const sls=DATA.slices[study]||[];
     st[slot]={el,ov,sl,nEl,ids:sls.map(u=>"wadouri:"+root+u),idx:0};
@@ -245,7 +268,10 @@
   function show(slot,n){const s=st[slot];if(!s.ids.length)return;
     cs.loadAndCacheImage(s.ids[n]).then(im=>{cs.displayImage(s.el,im);s.idx=n;s.sl.value=n;
       const t=(n+1)+" / "+s.ids.length;s.ov.textContent="SLICE "+t;
-      if(s.nEl)document.getElementById(s.nEl).textContent=t;}).catch(()=>{});}
+      if(s.nEl)document.getElementById(s.nEl).textContent=t;
+      const vp=cs.getViewport(s.el),w=document.getElementById("wl_"+slot);
+      if(vp&&w)w.textContent="W "+Math.round(vp.voi.windowWidth)+" / L "+Math.round(vp.voi.windowCenter);
+    }).catch(()=>{});}
 
   function setCompare(nbr){
     document.querySelectorAll('.nn').forEach(e=>
