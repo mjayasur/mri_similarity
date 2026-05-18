@@ -1,0 +1,12 @@
+# Core (embeddings / t-SNE / example viz)
+numpy
+pandas
+scikit-learn
+scipy
+matplotlib
+pydicom
+opencv-python-headless
+# Model-based embedding extraction (RSNA-2024 2nd-place solution) also needs:
+#   torch   (install the build appropriate for your machine)
+# torch is intentionally left unpinned/uninstalled here so the website + the
+# precomputed-embedding example work without the heavy dependency.

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Lumbar MRI Triplet Similarity Study</title>
+<!--
+  Baseline reader-study front-end. A collaborator will redesign this.
+  DATA CONTRACT (keep stable):
+    GET  triplets.json -> { triplets: [ {id, ref:{study,slices:[url..]},
+                                              a:{...}, b:{...}} ] }
+    POST /submit       -> {triplet_id, choice:"A"|"B", ref_study,a_study,b_study, ts}
+  Slice URLs are relative to this page (served by website/server.py; `data/`
+  is a symlink to the dataset root, set by scripts/make_triplets.py).
+-->
+<style>
+  body{margin:0;background:#0d0f12;color:#e8e8e8;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif}
+  header{padding:14px 20px;background:#15181d;border-bottom:1px solid #262b33}
+  header h1{margin:0;font-size:1.05rem}
+  header p{margin:6px 0 0;font-size:.85rem;color:#9aa4b2}
+  #prog{font-size:.85rem;color:#9aa4b2;margin-top:4px}
+  .grid{display:flex;gap:14px;justify-content:center;padding:18px;flex-wrap:wrap}
+  .panel{width:32%;min-width:300px}
+  .panel h2{margin:0 0 6px;font-size:.95rem;text-align:center}
+  .ref h2{color:#d7191c}.a h2{color:#1a9641}.b h2{color:#2c7fb8}
+  .view{width:100%;aspect-ratio:1/1;background:#000;border:2px solid #333;position:relative}
+  .ref .view{border-color:#d7191c}.a .view{border-color:#1a9641}.b .view{border-color:#2c7fb8}
+  .ovl{position:absolute;left:8px;bottom:6px;font-size:.72rem;color:#cfe;background:rgba(0,0,0,.55);padding:2px 6px;border-radius:3px;pointer-events:none}
+  .sliderwrap{display:flex;align-items:center;gap:8px;margin-top:8px}
+  .sliderwrap input[type=range]{flex:1;height:6px;cursor:pointer}
+  .ref input[type=range]{accent-color:#d7191c}.a input[type=range]{accent-color:#1a9641}.b input[type=range]{accent-color:#2c7fb8}
+  .num{font-size:.74rem;color:#9aa4b2;min-width:54px;text-align:right;font-variant-numeric:tabular-nums}
+  .hint{text-align:center;font-size:.74rem;color:#6a7480;margin-top:4px}
+  .ask{text-align:center;padding:14px 0 30px}
+  .ask p{font-size:1.05rem;margin:0 0 12px}
+  button{font-size:1rem;padding:11px 26px;margin:0 10px;border:0;border-radius:6px;cursor:pointer;font-weight:600}
+  #ba{background:#1a9641;color:#fff}#bb{background:#2c7fb8;color:#fff}
+  #done{font-size:1.05rem;color:#9be29b;margin-top:14px}
+  #err{color:#ff8080;text-align:center;font-size:.85rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>Lumbar MRI Triplet — Similarity Judgment</h1>
+  <p>Use the slider (or mouse wheel) under each panel to scroll slices. Compare <b>A</b> and <b>B</b> to the <b>Reference</b>, then choose which is more similar.</p>
+  <div id="prog"></div>
+</header>
+
+<div class="grid">
+  <div class="panel ref"><h2>REFERENCE</h2><div class="view" id="v_ref"><div class="ovl" id="o_ref"></div></div><div class="sliderwrap"><input type="range" id="sl_ref" min="0" max="0"><span class="num" id="n_ref">– / –</span></div><div class="hint">drag slider or scroll</div></div>
+  <div class="panel a"><h2>A</h2><div class="view" id="v_a"><div class="ovl" id="o_a"></div></div><div class="sliderwrap"><input type="range" id="sl_a" min="0" max="0"><span class="num" id="n_a">– / –</span></div><div class="hint">drag slider or scroll</div></div>
+  <div class="panel b"><h2>B</h2><div class="view" id="v_b"><div class="ovl" id="o_b"></div></div><div class="sliderwrap"><input type="range" id="sl_b" min="0" max="0"><span class="num" id="n_b">– / –</span></div><div class="hint">drag slider or scroll</div></div>
+</div>
+
+<div class="ask">
+  <p>Which study is <b>more similar</b> to the Reference?</p>
+  <button id="ba">A is more similar</button>
+  <button id="bb">B is more similar</button>
+  <div id="done"></div>
+  <div id="err"></div>
+</div>
+
+<script src="https://unpkg.com/dicom-parser@1.8.21/dist/dicomParser.min.js"></script>
+<script src="https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.min.js"></script>
+<script src="https://unpkg.com/cornerstone-wado-image-loader@4.13.2/dist/cornerstoneWADOImageLoader.bundle.min.js"></script>
+<script>
+(function(){
+  const cs=window.cornerstone, dp=window.dicomParser, wado=window.cornerstoneWADOImageLoader;
+  wado.external.cornerstone=cs; wado.external.dicomParser=dp;
+  wado.configure({useWebWorkers:false});
+  const origin=window.location.href.replace(/[^/]*$/,"");  // dir of index.html
+  const slots=["ref","a","b"]; const st={};
+  let triplets=[], cur=0;
+
+  function ids(slices){ return slices.map(u=>"wadouri:"+origin+u); }
+  function mount(slot, slices){
+    const el=document.getElementById("v_"+slot), ovl=document.getElementById("o_"+slot),
+          sl=document.getElementById("sl_"+slot), num=document.getElementById("n_"+slot);
+    if(!st[slot]) cs.enable(el);
+    st[slot]={el,ovl,sl,num,ids:ids(slices),idx:0};
+    sl.min=0; sl.max=Math.max(0,slices.length-1); sl.value=0;
+    show(slot,0);
+    sl.oninput=()=>show(slot,parseInt(sl.value,10));
+    el.onwheel=function(e){e.preventDefault();const s=st[slot];
+      let n=Math.max(0,Math.min(s.ids.length-1,s.idx+(e.deltaY>0?1:-1)));
+      if(n!==s.idx) show(slot,n);};
+  }
+  function show(slot,n){
+    const s=st[slot];
+    cs.loadAndCacheImage(s.ids[n]).then(img=>{
+      cs.displayImage(s.el,img); s.idx=n; s.sl.value=n;
+      const t=(n+1)+" / "+s.ids.length; s.ovl.textContent="slice "+t; s.num.textContent=t;
+    }).catch(e=>{document.getElementById("err").textContent=slot+": "+((e&&e.error&&e.error.message)||e);});
+  }
+  function loadTriplet(i){
+    const t=triplets[i];
+    document.getElementById("prog").textContent="Triplet "+(i+1)+" / "+triplets.length+"  (id "+t.id+")";
+    document.getElementById("done").textContent="";
+    document.getElementById("ba").style.display="";
+    document.getElementById("bb").style.display="";
+    mount("ref",t.ref.slices); mount("a",t.a.slices); mount("b",t.b.slices);
+  }
+  function submit(choice){
+    const t=triplets[cur];
+    fetch("submit",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({triplet_id:t.id,choice,ref_study:t.ref.study,
+        a_study:t.a.study,b_study:t.b.study,ts:new Date().toISOString()})})
+      .then(r=>{if(!r.ok)throw new Error(r.status);return r.text();})
+      .then(()=>{
+        document.getElementById("ba").style.display="none";
+        document.getElementById("bb").style.display="none";
+        if(cur+1<triplets.length){
+          document.getElementById("done").textContent="Recorded. Loading next…";
+          cur++; setTimeout(()=>loadTriplet(cur),500);
+        } else {
+          document.getElementById("done").textContent="All triplets complete. Thank you.";
+        }
+      })
+      .catch(e=>{document.getElementById("err").textContent="submit failed: "+e;});
+  }
+  document.getElementById("ba").onclick=()=>submit("A");
+  document.getElementById("bb").onclick=()=>submit("B");
+
+  fetch("triplets.json").then(r=>r.json()).then(j=>{
+    triplets=j.triplets||[];
+    if(!triplets.length){document.getElementById("err").textContent="no triplets in triplets.json";return;}
+    loadTriplet(0);
+  }).catch(e=>{document.getElementById("err").textContent="triplets.json load failed: "+e;});
+})();
+</script>
+</body>
+</html>

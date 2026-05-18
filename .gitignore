@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+scripts/out/
+website/responses.csv
+*.pt
+*.ckpt
+# large precomputed arrays are not vendored
+*.npy
+!data/**/*.dcm
