@@ -42,6 +42,29 @@ DEF_SDESC = os.path.join(DEF_DATA, "train_series_descriptions.csv")
 LINK_NAME = "lumbardisc"  # website/<LINK_NAME> -> image root
 
 
+LEVELS = [("l1_l2", "L1/L2"), ("l2_l3", "L2/L3"), ("l3_l4", "L3/L4"),
+          ("l4_l5", "L4/L5"), ("l5_s1", "L5/S1")]
+
+
+def _g(v):
+    v = (v or "").strip()
+    return v if v in ("Normal/Mild", "Moderate", "Severe") else ""
+
+
+def findings(r):
+    """Per-level RSNA-2024 stenosis grades, human-readable keys."""
+    out = {}
+    for k, lab in LEVELS:
+        out[lab] = {
+            "canal": _g(r.get(f"spinal_canal_stenosis_{k}")),
+            "foram_l": _g(r.get(f"left_neural_foraminal_narrowing_{k}")),
+            "foram_r": _g(r.get(f"right_neural_foraminal_narrowing_{k}")),
+            "subart_l": _g(r.get(f"left_subarticular_stenosis_{k}")),
+            "subart_r": _g(r.get(f"right_subarticular_stenosis_{k}")),
+        }
+    return out
+
+
 def severity(sev_score, agg):
     if (agg or "").strip() == "Any Severe":
         return "severe"
@@ -135,6 +158,7 @@ def main():
             "y": round(float(XY[i, 1]), 4),
             "sev_score": int(float(r.get("sev_score", 0) or 0)),
             "severity": severity(r.get("sev_score"), r.get("agg_severity")),
+            "findings": findings(r),
         })
         kept.append(i)
 

@@ -43,8 +43,9 @@ dataset** and pass it via the `MRI_SIM_LUMBARDISC` environment variable (or the
 5. **`scripts/make_triplets.py`** — selects **40 triplets** from a LumbarDISC dataset
    (random at baseline) and writes `website/triplets.json` for the reader-study site.
 5b. **`scripts/make_tsne_app.py`** — builds `website/tsne.json` for the t-SNE
-   explorer: per-study t-SNE coords + severity + **exact cosine nearest
-   neighbours** from the embeddings, and symlinks `website/lumbardisc` at the
+   explorer: per-study t-SNE coords + severity + per-level RSNA-2024 stenosis
+   findings + **exact cosine nearest neighbours** from the embeddings, and
+   symlinks `website/lumbardisc` at the
    dataset image root so the DICOMs are servable.
 6. **`website/`** — the start of the triplet study site (Cornerstone.js, scrollable
    DICOM stacks, slider + mouse wheel, A/B choice logged to CSV). **A collaborator

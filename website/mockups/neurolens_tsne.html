@@ -78,6 +78,14 @@
   .vtool input{flex:1;accent-color:var(--cy);height:4px}
   .rsec{padding:14px 15px;border-bottom:1px solid var(--line)}
   .rsec .mono{font-size:.6rem;color:var(--cy);margin-bottom:10px}
+  .fsum{font-size:.66rem;color:var(--mut);line-height:1.55;margin-bottom:10px}
+  table.fnd{width:100%;border-collapse:collapse;font-size:.6rem;
+    font-family:"SF Mono",ui-monospace,Menlo,monospace}
+  table.fnd th{color:var(--dim);font-weight:600;text-align:center;
+    padding:4px 2px;border-bottom:1px solid var(--line2);text-transform:uppercase;letter-spacing:.06em}
+  table.fnd td{text-align:center;padding:4px 2px;border-bottom:1px solid var(--line)}
+  table.fnd td.lv{color:var(--mut);text-align:left}
+  .g-n{color:#46505f}.g-m{color:var(--am);font-weight:700}.g-s{color:var(--rd);font-weight:700}
   .kvp{display:flex;justify-content:space-between;font-size:.74rem;margin:7px 0}
   .kvp b{color:var(--mut);font-weight:600}
   .note{padding:14px 15px;font-size:.62rem;color:var(--dim);line-height:1.6}
@@ -96,7 +104,6 @@
   <div style="flex:1"></div>
   <div class="legend mono"><span><i class="sev-normal"></i>normal</span>
     <span><i class="sev-moderate"></i>moderate</span><span><i class="sev-severe"></i>severe</span></div>
-  <span class="pill mono"><span class="d"></span>Cornerstone</span>
 </div>
 
 <!-- SCREEN 1 -->
@@ -148,11 +155,17 @@
       <div class="kvp"><b>Severity label</b><span id="mSev">–</span></div>
       <div class="kvp"><b>Severity score</b><span id="mScore">–</span></div>
       <div class="kvp"><b>Cosine similarity</b><span id="mSim" style="color:var(--cy)">–</span></div>
+      <div class="mono" style="margin:14px 0 7px">Stenosis findings</div>
+      <div class="fsum" id="sum_cmp">–</div>
+      <div id="fnd_cmp"></div>
     </div>
     <div class="rsec">
       <div class="mono">Reference</div>
       <div class="kvp"><b>Study UID</b><span id="mRef">–</span></div>
       <div class="kvp"><b>Severity label</b><span id="mRefSev">–</span></div>
+      <div class="mono" style="margin:14px 0 7px">Stenosis findings</div>
+      <div class="fsum" id="sum_ref">–</div>
+      <div id="fnd_ref"></div>
     </div>
     <div class="note"><span class="am">Real:</span> t-SNE coords + exact cosine
       similarity from the embeddings. <span class="am">Not in this demo:</span>
@@ -281,6 +294,45 @@
       if(w)w.textContent="W "+Math.round(s.voi.ww)+" / L "+Math.round(s.voi.wc);
     }).catch(()=>{});}
 
+  const FNAME={canal:"central canal",foram_l:"left foraminal",
+    foram_r:"right foraminal",subart_l:"left subarticular",subart_r:"right subarticular"};
+  function gcell(v){
+    if(v==="Severe")return '<span class="g-s">Sev</span>';
+    if(v==="Moderate")return '<span class="g-m">Mod</span>';
+    if(v==="Normal/Mild")return '<span class="g-n">N</span>';
+    return '<span class="g-n">–</span>';
+  }
+  function findingsTable(study){
+    const f=(byId[study]||{}).findings;
+    if(!f)return '<div class="fsum">No graded stenosis findings for this study.</div>';
+    let h='<table class="fnd"><tr><th style="text-align:left">Level</th><th>Canal</th>'+
+          '<th>Foram L/R</th><th>Subart L/R</th></tr>';
+    ["L1/L2","L2/L3","L3/L4","L4/L5","L5/S1"].forEach(L=>{
+      const r=f[L]||{};
+      h+='<tr><td class="lv">'+L+'</td><td>'+gcell(r.canal)+'</td><td>'+
+         gcell(r.foram_l)+' / '+gcell(r.foram_r)+'</td><td>'+
+         gcell(r.subart_l)+' / '+gcell(r.subart_r)+'</td></tr>';
+    });
+    return h+'</table>';
+  }
+  function humanSummary(study){
+    const f=(byId[study]||{}).findings; if(!f)return "Findings unavailable.";
+    const sev=[],mod=[];
+    Object.keys(f).forEach(L=>{const r=f[L];Object.keys(FNAME).forEach(k=>{
+      if(r[k]==="Severe")sev.push(L+" "+FNAME[k]);
+      else if(r[k]==="Moderate")mod.push(L+" "+FNAME[k]);});});
+    if(!sev.length&&!mod.length)
+      return "All graded levels Normal/Mild — no moderate or severe stenosis.";
+    let s="";
+    if(sev.length)s+='<span class="g-s">Severe</span> — '+sev.join("; ")+". ";
+    if(mod.length)s+='<span class="g-m">Moderate</span> — '+mod.join("; ")+".";
+    return s;
+  }
+  function showFindings(study,sumId,tblId){
+    document.getElementById(sumId).innerHTML=humanSummary(study);
+    document.getElementById(tblId).innerHTML=findingsTable(study);
+  }
+
   function setCompare(nbr){
     document.querySelectorAll('.nn').forEach(e=>
       e.classList.toggle('on',e.dataset.s===nbr.study));
@@ -294,6 +346,7 @@
     document.getElementById("mSev").textContent=pt.severity||"–";
     document.getElementById("mScore").textContent=(pt.sev_score!=null?pt.sev_score:"–");
     document.getElementById("mSim").textContent=pct+"  (cos d "+nbr.cos_dist+")";
+    showFindings(nbr.study,"sum_cmp","fnd_cmp");
     mount("a",nbr.study,"aN");
   }
   function openSim(sid){
@@ -307,6 +360,7 @@
     document.getElementById("rL").textContent=cur.severity;
     document.getElementById("mRef").textContent=sid;
     document.getElementById("mRefSev").textContent=cur.severity;
+    showFindings(sid,"sum_ref","fnd_ref");
     const list=document.getElementById("nnlist");list.innerHTML="";
     cur.nn.forEach((nbr,i)=>{
       const pt=byId[nbr.study]||{};
