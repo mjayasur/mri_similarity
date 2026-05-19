@@ -30,8 +30,14 @@ LOG = os.path.join(DATA, "axial_fetch.log")
 COMP = "rsna-2024-lumbar-spine-degenerative-classification"
 MISS_TOL = 3      # consecutive genuine 404s => end of series
 MAX_INST = 400    # hard safety cap per series
-MAX_HOURS = float(os.environ.get("AXIAL_MAX_HOURS", "5"))  # wall-clock guard
-BASE_SLEEP = 0.7  # polite pace between files (avoid re-tripping the limit)
+# Kaggle throttles competition single-file downloads per ACCOUNT (a daily-ish
+# quota -- confirmed identical 429 from two different IPs / clients). So this
+# is a resumable DAILY job: fetch a bounded number of files per run, paced
+# politely, and bail fast when the quota is clearly closed.
+MAX_FILES = int(os.environ.get("AXIAL_MAX_FILES", "350"))   # new files per run
+BASE_SLEEP = float(os.environ.get("AXIAL_BASE_SLEEP", "4"))  # sec between files
+MAX_RETRY = 5     # 429 backoff attempts per instance before declaring "wall"
+WALL_TOL = 4      # instances that hit the wall in a row => quota closed, stop
 
 
 def _status(e):
@@ -84,11 +90,12 @@ def main():
 
     log(f"start: {len(studies)} studies, "
         f"{sum(len(v) for v in axial.values())} axial series")
-    got = 0
-    deadline = time.time() + MAX_HOURS * 3600
-    out_of_time = False
+    have = 0          # files already on disk (resumed)
+    new = 0           # files fetched this run
+    wall_streak = 0   # consecutive instances that exhausted retries on 429
+    stop = None       # 'cap' | 'wall' | None(=finished sweep)
     for si, (study, sers) in enumerate(sorted(axial.items()), 1):
-        if out_of_time:
+        if stop:
             break
         for ser in sers:
             dest = os.path.join(IMGS, study, str(ser))
@@ -97,36 +104,42 @@ def main():
             for n in range(1, MAX_INST + 1):
                 fp = os.path.join(dest, f"{n}.dcm")
                 if os.path.isfile(fp) and os.path.getsize(fp) > 0:
-                    got += 1
+                    have += 1
                     miss = 0
                     continue
                 fn = f"train_images/{study}/{ser}/{n}.dcm"
-                back = 30
-                while True:                       # retry SAME instance on 429
-                    if time.time() > deadline:
-                        out_of_time = True
-                        break
+                back, tries, r = 20, 0, "retry"
+                while r == "retry" and tries < MAX_RETRY:
                     r = fetch_one(api, fn, dest)
-                    if r is True:
-                        got += 1
-                        miss = 0
-                        break
-                    if r is False:                # genuine 404 -> series end
-                        miss += 1
-                        break
-                    log(f"throttled (429) at {study}/{ser}/{n}; "
-                        f"sleeping {back}s")
-                    time.sleep(back)
-                    back = min(int(back * 2), 600)
-                if out_of_time or miss >= MISS_TOL:
+                    if r == "retry":
+                        tries += 1
+                        time.sleep(back)
+                        back = min(int(back * 2), 240)
+                if r is True:
+                    new += 1
+                    miss = 0
+                    wall_streak = 0
+                elif r is False:                  # genuine 404 -> series end
+                    miss += 1
+                    wall_streak = 0
+                else:                             # still 429 after MAX_RETRY
+                    wall_streak += 1
+                    log(f"throttle wall at {study}/{ser}/{n} "
+                        f"(streak {wall_streak}/{WALL_TOL})")
+                if wall_streak >= WALL_TOL:
+                    stop = "wall"
+                    break
+                if new >= MAX_FILES:
+                    stop = "cap"
+                    break
+                if miss >= MISS_TOL:
                     break
                 time.sleep(BASE_SLEEP)
-            if out_of_time:
+            if stop:
                 break
-        if si % 5 == 0 or si == len(axial) or out_of_time:
-            log(f"{si}/{len(axial)} studies · {got} dcm present")
-    log(f"download {'PAUSED (time cap, resumable)' if out_of_time else 'done'}"
-        f": {got} dcm present")
+        if si % 5 == 0 or si == len(axial) or stop:
+            log(f"{si}/{len(axial)} studies · +{new} new, {have} present")
+    log(f"run end ({stop or 'swept all'}): +{new} new this run")
 
     # regenerate triplets.json (now with Axial T2 views) and resync to Tower
     subprocess.run([
