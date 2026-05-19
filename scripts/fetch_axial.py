@@ -47,8 +47,8 @@ MAX_INST = 400    # hard safety cap per series
 # politely, and bail fast when the quota is clearly closed.
 MAX_FILES = int(os.environ.get("AXIAL_MAX_FILES", "350"))   # new files per run
 BASE_SLEEP = float(os.environ.get("AXIAL_BASE_SLEEP", "4"))  # sec between files
-MAX_RETRY = 5     # 429 backoff attempts per instance before declaring "wall"
-WALL_TOL = 4      # instances that hit the wall in a row => quota closed, stop
+MAX_RETRY = 3     # 429 backoff attempts per instance before declaring "wall"
+WALL_TOL = 3      # instances that hit the wall in a row => quota closed, stop
 
 
 def _status(e):
@@ -119,13 +119,13 @@ def main():
                     miss = 0
                     continue
                 fn = f"train_images/{study}/{ser}/{n}.dcm"
-                back, tries, r = 20, 0, "retry"
+                back, tries, r = 10, 0, "retry"
                 while r == "retry" and tries < MAX_RETRY:
                     r = fetch_one(api, fn, dest)
                     if r == "retry":
                         tries += 1
                         time.sleep(back)
-                        back = min(int(back * 2), 240)
+                        back = min(int(back * 2), 60)
                 if r is True:
                     new += 1
                     miss = 0
