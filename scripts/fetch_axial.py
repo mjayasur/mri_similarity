@@ -23,10 +23,21 @@ import subprocess
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATA = os.path.expanduser("~/Downloads/rsna-test/data")
-IMGS = os.path.join(DATA, "train_images")
-SDESC = os.path.join(DATA, "train_series_descriptions.csv")
-TRIP = os.path.join(REPO, "website", "triplets.json")
-LOG = os.path.join(DATA, "axial_fetch.log")
+# All paths are env-overridable so this runs either on the Mac (default,
+# then rsyncs to Tower) or natively ON Tower (set AXIAL_* + AXIAL_NO_SYNC=1
+# so the daily cron needs no SSH back out).
+IMGS = os.path.expanduser(os.environ.get("AXIAL_IMGS",
+                                         os.path.join(DATA, "train_images")))
+SDESC = os.path.expanduser(os.environ.get(
+    "AXIAL_SDESC", os.path.join(DATA, "train_series_descriptions.csv")))
+TRIP = os.path.expanduser(os.environ.get(
+    "AXIAL_TRIP", os.path.join(REPO, "website", "triplets.json")))
+LOG = os.path.expanduser(os.environ.get(
+    "AXIAL_LOG", os.path.join(DATA, "axial_fetch.log")))
+MKTRIP = os.path.expanduser(os.environ.get(
+    "AXIAL_MKTRIP", os.path.join(REPO, "scripts", "make_triplets.py")))
+PYBIN = os.environ.get("AXIAL_PY", "python")
+NO_SYNC = os.environ.get("AXIAL_NO_SYNC") == "1"
 COMP = "rsna-2024-lumbar-spine-degenerative-classification"
 MISS_TOL = 3      # consecutive genuine 404s => end of series
 MAX_INST = 400    # hard safety cap per series
@@ -141,11 +152,14 @@ def main():
             log(f"{si}/{len(axial)} studies · +{new} new, {have} present")
     log(f"run end ({stop or 'swept all'}): +{new} new this run")
 
-    # regenerate triplets.json (now with Axial T2 views) and resync to Tower
-    subprocess.run([
-        "python", os.path.join(REPO, "scripts", "make_triplets.py"),
-        "--lumbardisc", IMGS, "--n", "40"], check=True, cwd=REPO)
-    log("regenerated triplets.json")
+    # regenerate triplets.json (now with Axial T2 views)
+    subprocess.run([PYBIN, MKTRIP, "--lumbardisc", IMGS,
+                    "--n", "40", "--out", TRIP], check=True)
+    log(f"regenerated {TRIP}")
+
+    if NO_SYNC:
+        log("running on the serving host — no resync needed; DONE")
+        return
 
     with open("/tmp/triplet_studies.txt", "w") as f:
         f.write("\n".join(sorted(studies)) + "\n")
