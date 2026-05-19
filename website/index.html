@@ -37,7 +37,13 @@
   .main{flex:1;display:flex;flex-direction:column;min-width:0;overflow:auto}
   .grid{display:flex;gap:14px;justify-content:center;padding:18px;flex-wrap:wrap}
   .panel{width:32%;min-width:280px}
-  .panel h2{margin:0 0 6px;font-size:.95rem;text-align:center}
+  .ph{position:relative;display:flex;align-items:center;justify-content:center;margin-bottom:6px}
+  .panel h2{margin:0;font-size:.95rem}
+  .plbtn{position:absolute;right:0;top:50%;transform:translateY(-50%);
+    background:#222831;color:#cdd6e2;border:1px solid #3a4350;border-radius:5px;
+    font-size:.66rem;padding:5px 9px;cursor:pointer;font-weight:600}
+  .plbtn:hover{background:#2c333d}
+  .plbtn:disabled{opacity:.45;cursor:default}
   .ref h2{color:#d7191c}.a h2{color:#1a9641}.b h2{color:#2c7fb8}
   .view{width:100%;aspect-ratio:1/1;background:#000;border:2px solid #333;position:relative;cursor:crosshair}
   .ref .view{border-color:#d7191c}.a .view{border-color:#1a9641}.b .view{border-color:#2c7fb8}
@@ -72,9 +78,9 @@
   </div>
   <div class="main">
     <div class="grid">
-      <div class="panel ref"><h2>REFERENCE</h2><div class="view" id="v_ref"><div class="ovl" id="o_ref"></div></div><div class="sliderwrap"><input type="range" id="sl_ref" min="0" max="0"><span class="num" id="n_ref">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_ref">W – / L –</span></div></div>
-      <div class="panel a"><h2>A</h2><div class="view" id="v_a"><div class="ovl" id="o_a"></div></div><div class="sliderwrap"><input type="range" id="sl_a" min="0" max="0"><span class="num" id="n_a">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_a">W – / L –</span></div></div>
-      <div class="panel b"><h2>B</h2><div class="view" id="v_b"><div class="ovl" id="o_b"></div></div><div class="sliderwrap"><input type="range" id="sl_b" min="0" max="0"><span class="num" id="n_b">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_b">W – / L –</span></div></div>
+      <div class="panel ref"><div class="ph"><h2>REFERENCE</h2><button class="plbtn" id="pl_ref">–</button></div><div class="view" id="v_ref"><div class="ovl" id="o_ref"></div></div><div class="sliderwrap"><input type="range" id="sl_ref" min="0" max="0"><span class="num" id="n_ref">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_ref">W – / L –</span></div></div>
+      <div class="panel a"><div class="ph"><h2>A</h2><button class="plbtn" id="pl_a">–</button></div><div class="view" id="v_a"><div class="ovl" id="o_a"></div></div><div class="sliderwrap"><input type="range" id="sl_a" min="0" max="0"><span class="num" id="n_a">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_a">W – / L –</span></div></div>
+      <div class="panel b"><div class="ph"><h2>B</h2><button class="plbtn" id="pl_b">–</button></div><div class="view" id="v_b"><div class="ovl" id="o_b"></div></div><div class="sliderwrap"><input type="range" id="sl_b" min="0" max="0"><span class="num" id="n_b">– / –</span></div><div class="hint">drag = window · <span class="wl" id="wl_b">W – / L –</span></div></div>
     </div>
     <div class="ask">
       <p>Which study is <b>more similar</b> to the Reference?</p>
@@ -115,8 +121,26 @@
   });
   window.addEventListener("mouseup",()=>{win=null;});
 
+  const PLANE_ORDER=["Sagittal T2","Axial T2","Sagittal T1"];
   function ids(slices){ return slices.map(u=>"wadouri:"+origin+u); }
-  function mount(slot, slices){
+  function planeList(views){
+    const ks=Object.keys(views||{});
+    return PLANE_ORDER.filter(p=>ks.includes(p))
+             .concat(ks.filter(k=>!PLANE_ORDER.includes(k)));
+  }
+  function applyPlane(slot){
+    const s=st[slot], pl=s.planes[s.pi], slices=s.ent.views[pl]||[];
+    s.ids=ids(slices); s.idx=0; s.voi=null;     // re-window for the new plane
+    s.sl.min=0; s.sl.max=Math.max(0,slices.length-1); s.sl.value=0;
+    const btn=document.getElementById("pl_"+slot);
+    btn.textContent=pl+(s.planes.length>1?"  ⇄":"");
+    btn.disabled=s.planes.length<2;
+    btn.title=s.planes.length>1
+      ? "Toggle plane ("+s.planes.join(" / ")+")" : pl+" only";
+    if(slices.length) show(slot,0);
+    else { s.ovl.textContent=""; s.num.textContent="– / –"; }
+  }
+  function mount(slot, ent){
     const el=document.getElementById("v_"+slot),
           sl=document.getElementById("sl_"+slot);
     if(!st[slot]){
@@ -131,14 +155,18 @@
         e.preventDefault();});
       el.addEventListener("dblclick",()=>{
         const s=st[slot]; if(!s)return; s.voi=null; show(slot,s.idx);});
+      document.getElementById("pl_"+slot).onclick=()=>{
+        const s=st[slot]; if(!s||s.planes.length<2)return;
+        s.pi=(s.pi+1)%s.planes.length; applyPlane(slot);};
       sl.oninput=()=>show(slot,parseInt(sl.value,10));
     }
-    st[slot]={el,
-      ovl:document.getElementById("o_"+slot), sl,
+    const views=ent.views||{"Sagittal T2":ent.slices||[]};
+    const planes=planeList(views);
+    let pi=planes.indexOf(ent.default_plane); if(pi<0)pi=0;
+    st[slot]={el, ovl:document.getElementById("o_"+slot), sl,
       num:document.getElementById("n_"+slot),
-      ids:ids(slices), idx:0};
-    sl.min=0; sl.max=Math.max(0,slices.length-1); sl.value=0;
-    if(slices.length) show(slot,0);
+      ent:{views}, planes, pi, ids:[], idx:0};
+    applyPlane(slot);
   }
   function show(slot,n){
     const s=st[slot]; if(!s.ids.length)return;
@@ -180,7 +208,7 @@
       (answer[i]?("  ·  you chose "+answer[i]):"");
     document.getElementById("done").textContent="";
     document.getElementById("err").textContent="";
-    mount("ref",t.ref.slices); mount("a",t.a.slices); mount("b",t.b.slices);
+    mount("ref",t.ref); mount("a",t.a); mount("b",t.b);
     renderList();
   }
   function go(d){ const n=cur+d; if(n>=0&&n<triplets.length) loadTriplet(n); }

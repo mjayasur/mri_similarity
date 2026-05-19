@@ -47,10 +47,15 @@ dataset** and pass it via the `MRI_SIM_LUMBARDISC` environment variable (or the
    findings + **exact cosine nearest neighbours** from the embeddings, and
    symlinks `website/lumbardisc` at the
    dataset image root so the DICOMs are servable.
-6. **`website/`** — the start of the triplet study site (Cornerstone.js, scrollable
-   DICOM stacks, slider + mouse wheel, A/B choice logged to CSV). **A collaborator
-   will replace the design** — keep the data contract (`triplets.json`, `/submit`)
-   stable. Ships working out of the box on the 3 bundled studies.
+6. **`website/`** — the triplet study site (Cornerstone.js, scrollable DICOM
+   stacks, slider + mouse wheel, **window/level on drag**, a 40-triplet sidebar
+   with done state, and a **per-panel plane toggle** — Sagittal T2 / Axial T2 /
+   Sagittal T1, whichever the data has; LumbarDISC has no coronal series).
+   **A collaborator will replace the design** — keep the data contract
+   (`triplets.json` incl. additive `views`, `/submit`) stable.
+6b. **`scripts/fetch_axial.py`** — backfills Axial T2 DICOMs for the triplet
+   studies from the RSNA-2024 Kaggle competition, regenerates `triplets.json`,
+   and resyncs to the Tower deployment (long-running; background it).
 
 ### Third-party persistence (important)
 The model code and weights are **third-party** (Brendan Artley's 2nd-place
