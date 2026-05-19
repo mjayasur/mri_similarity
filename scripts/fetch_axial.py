@@ -15,6 +15,7 @@ Idempotent: files already on disk are skipped.
 """
 import os
 import csv
+import sys
 import json
 import time
 import glob
@@ -27,8 +28,35 @@ SDESC = os.path.join(DATA, "train_series_descriptions.csv")
 TRIP = os.path.join(REPO, "website", "triplets.json")
 LOG = os.path.join(DATA, "axial_fetch.log")
 COMP = "rsna-2024-lumbar-spine-degenerative-classification"
-MISS_TOL = 3      # consecutive missing instance numbers => end of series
+MISS_TOL = 3      # consecutive genuine 404s => end of series
 MAX_INST = 400    # hard safety cap per series
+MAX_HOURS = float(os.environ.get("AXIAL_MAX_HOURS", "5"))  # wall-clock guard
+BASE_SLEEP = 0.7  # polite pace between files (avoid re-tripping the limit)
+
+
+def _status(e):
+    return (getattr(e, "status", None)
+            or getattr(getattr(e, "response", None), "status_code", None))
+
+
+def fetch_one(api, fn, dest):
+    """Return True (saved), False (genuine 404 -> series end), or 'retry'.
+
+    429 / 403 / 5xx are throttling/transient: caller backs off and retries the
+    SAME instance (never counted as a miss), so a rate limit can't truncate a
+    series the way the first run did.
+    """
+    b = os.path.basename(fn)
+    fp = os.path.join(dest, b)
+    try:
+        api.competition_download_file(COMP, fn, path=dest,
+                                      force=True, quiet=True)
+        return os.path.isfile(fp) and os.path.getsize(fp) > 0
+    except Exception as e:
+        st = _status(e)
+        if st == 404:
+            return False
+        return "retry"   # 429/403/5xx/other -> transient
 
 
 def log(msg):
@@ -56,8 +84,12 @@ def main():
 
     log(f"start: {len(studies)} studies, "
         f"{sum(len(v) for v in axial.values())} axial series")
-    got = skip = 0
+    got = 0
+    deadline = time.time() + MAX_HOURS * 3600
+    out_of_time = False
     for si, (study, sers) in enumerate(sorted(axial.items()), 1):
+        if out_of_time:
+            break
         for ser in sers:
             dest = os.path.join(IMGS, study, str(ser))
             os.makedirs(dest, exist_ok=True)
@@ -69,22 +101,32 @@ def main():
                     miss = 0
                     continue
                 fn = f"train_images/{study}/{ser}/{n}.dcm"
-                try:
-                    api.competition_download_file(COMP, fn, path=dest,
-                                                  force=True, quiet=True)
-                    if os.path.isfile(fp) and os.path.getsize(fp) > 0:
+                back = 30
+                while True:                       # retry SAME instance on 429
+                    if time.time() > deadline:
+                        out_of_time = True
+                        break
+                    r = fetch_one(api, fn, dest)
+                    if r is True:
                         got += 1
                         miss = 0
-                    else:
+                        break
+                    if r is False:                # genuine 404 -> series end
                         miss += 1
-                except Exception:
-                    miss += 1
-                if miss >= MISS_TOL:
+                        break
+                    log(f"throttled (429) at {study}/{ser}/{n}; "
+                        f"sleeping {back}s")
+                    time.sleep(back)
+                    back = min(int(back * 2), 600)
+                if out_of_time or miss >= MISS_TOL:
                     break
-                time.sleep(0.05)
-        if si % 10 == 0 or si == len(axial):
-            log(f"{si}/{len(axial)} studies · {got} dcm fetched")
-    log(f"download done: {got} fetched, {skip} pre-existing")
+                time.sleep(BASE_SLEEP)
+            if out_of_time:
+                break
+        if si % 5 == 0 or si == len(axial) or out_of_time:
+            log(f"{si}/{len(axial)} studies · {got} dcm present")
+    log(f"download {'PAUSED (time cap, resumable)' if out_of_time else 'done'}"
+        f": {got} dcm present")
 
     # regenerate triplets.json (now with Axial T2 views) and resync to Tower
     subprocess.run([
