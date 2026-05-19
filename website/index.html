@@ -43,7 +43,12 @@
     background:#222831;color:#cdd6e2;border:1px solid #3a4350;border-radius:5px;
     font-size:.66rem;padding:5px 9px;cursor:pointer;font-weight:600}
   .plbtn:hover{background:#2c333d}
-  .plbtn:disabled{opacity:.45;cursor:default}
+  .plbtn:disabled{opacity:.4;cursor:default}
+  .plbtn.multi{background:#10333a;color:#5fe6f0;border-color:#2f8f9b;
+    box-shadow:0 0 10px #34e3f033}
+  .axbadge{font-size:.56rem;font-weight:700;letter-spacing:.06em;
+    background:#10333a;color:#5fe6f0;border:1px solid #2f8f9b;
+    border-radius:4px;padding:1px 5px;margin-left:6px}
   .ref h2{color:#d7191c}.a h2{color:#1a9641}.b h2{color:#2c7fb8}
   .view{width:100%;aspect-ratio:1/1;background:#000;border:2px solid #333;position:relative;cursor:crosshair}
   .ref .view{border-color:#d7191c}.a .view{border-color:#1a9641}.b .view{border-color:#2c7fb8}
@@ -67,7 +72,9 @@
 <header>
   <h1>Lumbar MRI Triplet — Similarity Judgment</h1>
   <p>Scroll each panel (slider or mouse wheel). <b>Drag on an image</b> to window
-     (brightness/contrast); double-click resets. Pick which is more similar.</p>
+     (brightness/contrast); double-click resets. Use the <b>plane button</b> at
+     a panel's top-right to switch Sagittal&nbsp;T2 / Axial&nbsp;T2. Triplets with
+     an extra plane are marked <span class="axbadge">AX</span> in the list.</p>
   <div id="prog"></div>
 </header>
 
@@ -135,6 +142,7 @@
     const btn=document.getElementById("pl_"+slot);
     btn.textContent=pl+(s.planes.length>1?"  ⇄":"");
     btn.disabled=s.planes.length<2;
+    btn.classList.toggle("multi",s.planes.length>1);
     btn.title=s.planes.length>1
       ? "Toggle plane ("+s.planes.join(" / ")+")" : pl+" only";
     if(slices.length) show(slot,0);
@@ -188,18 +196,23 @@
   }
 
   function renderList(){
-    const L=document.getElementById("list"); L.innerHTML="";
+    const L=document.getElementById("list"); L.innerHTML=""; let axN=0;
     triplets.forEach((t,i)=>{
       const d=document.createElement("div");
       d.className="ti"+(i===cur?" cur":"")+(done.has(i)?" done":"");
+      const ax=["ref","a","b"].some(s=>t[s].views&&
+        Object.keys(t[s].views).length>1);
+      if(ax)axN++;
       d.innerHTML='<span class="st">'+(done.has(i)?"✓":"")+'</span>'+
-        '<span class="lab"><b>Triplet '+(i+1)+'</b><small>'+
+        '<span class="lab"><b>Triplet '+(i+1)+
+        (ax?'<span class="axbadge">AX</span>':'')+'</b><small>'+
         (answer[i]?("answered "+answer[i]):("ref "+t.ref.study))+'</small></span>';
       d.onclick=()=>{cur=i; loadTriplet(i);};
       L.appendChild(d);
     });
-    document.getElementById("sideHead").textContent=
-      "Triplets — "+done.size+" / "+triplets.length+" done";
+    document.getElementById("sideHead").innerHTML=
+      "Triplets — "+done.size+" / "+triplets.length+" done"+
+      (axN?'  ·  <span class="axbadge">'+axN+' AX</span>':"");
   }
   function loadTriplet(i){
     cur=i; const t=triplets[i];
